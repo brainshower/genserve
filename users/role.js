@@ -21,6 +21,7 @@ exports.setPermissions = function (role, permGroup, perms) {
 
     // First look for the role to see if it already exists.
     db.db.collection(col_roles, function(err, collection) {
+        collection.ensureIndex({name:1},{unique:true});
         collection.findOne({name:role}, function(err, roleObject) {
 
             var ret = {};
@@ -35,68 +36,70 @@ exports.setPermissions = function (role, permGroup, perms) {
             }
 
             // No role exists with this name; need to create it.
-            else if (roleObject === {} || roleObject === undefined || roleObject === null) {
-
-                logger.log.info('setPermissions: Creating new role object: ', role);
-                var newRoleObject = {
-                    name : role,
-                    permGroups : {},
-                };
-                newRoleObject.permGroups[permGroup] = perms;
-                logger.log.debug('New role object: ' + JSON.stringify(newRoleObject));
-
-                // Insert into the database.
-                db.db.collection(col_roles, function(err, collection) {
-                    collection.insert(newRoleObject, {safe:true, w:1}, function(err, result) {
-                        var ret = {};
-                        if (err) {
-                            logger.log.error('setPermissions: Could not add the new role into the database: ', err)
-                            ret = status.statusCode(2, 'role', 'Error adding the new role.');
-                            deferred.reject(ret);
-                        }
-                        else {
-                            logger.log.debug('setPermissions: Successfully created new role object.');
-                            ret = status.success('role');
-                            ret.node = result[0];
-                            deferred.resolve(ret);
-                        }
-                    });
-                });
-
-            } // else if
-
-            // Role exists, so we need to update the perms and store in the database.
             else {
-                db.db.collection(col_roles, function(err, collection) {
+                var newRoleObject;
 
+                if (roleObject === {} || roleObject === undefined || roleObject === null) {
+                    // No role exists with this name; need to create it.
+                    logger.log.info('setPermissions: Creating new role object: ', role);
+                    var newRoleObject = {
+                        name : role,
+                        permGroups : {},
+                    };
+                    newRoleObject.permGroups[permGroup] = perms;
+                    logger.log.debug('New role object: ',  newRoleObject);
+                    db.db.collection(col_roles, function(err, collection) {
+                        collection.findAndModify({name:role}, [['_id','asc']], newRoleObject, {upsert: true, safe:true}, function(err, result) {
+                            var ret = {};
+                            if (err) {
+                                logger.log.error('setPermissions: Could not insert new role or update existing role object perm group: ', err);
+                                ret = status.statusCode(3, 'role', 'Error updating the perm group');
+                                deferred.reject(ret);
+                            }
+                            else {
+                                logger.log.debug('setPermissions: Successfully added role object perms.');
+                                ret = status.success('role')
+                                deferred.resolve(ret);
+                            }
+                        });
+                    });
+                }
+                else {
+                    // Role exists, so we need to update the perms and store in the database.
                     // Merge in the new perms.
+                    logger.log.info('setPermissions: Adding permissions to existing role object');
                     if (roleObject.permGroups.hasOwnProperty(permGroup)) {
                         // Perm group already exists, so need to merge in the new perms.
                         for (var i in perms) { roleObject.permGroups[permGroup][i] = perms[i]; }
-                    } 
+                    }
                     else {
                         // No perm group exists, so we'll create it and add the permissions.
                         roleObject.permGroups[permGroup] = perms;
                     }
-
-                    logger.log.info('setPermissions: Adding permissions to existing role object');
-                    logger.log.debug(roleObject);
-                    collection.update({_id : new db.BSON.ObjectID(roleObject._id)}, roleObject, {safe:true}, function(err, result) {
-                        var ret = {};
-                        if (err) {
-                            logger.log.error('setPermissions: Could not update existing role object perm group: ', err);
-                            ret = status.statusCode(3, 'role', 'Error updating the perm group');
-                            deferred.reject(ret);
-                        }
-                        else {
-                            logger.log.debug('setPermissions: Successfully added role object perms.');
-                            ret = status.success('role')
-                            deferred.resolve(ret);
-                        }
-                     });
-                });
-            }
-
+                    newRoleObject = roleObject;
+                    logger.log.debug('New role object: ',  newRoleObject);
+                
+                    // Push the role object back to the database.
+                    db.db.collection(col_roles, function(err, collection) {
+                        var upd = {};
+                        upd.$set = {};
+                        upd.$set["permGroups." + permGroup] = roleObject.permGroups[permGroup];
+                        collection.findAndModify({name:role}, [['_id','asc']], upd, {upsert: true, safe:true}, function(err, result) {
+                            var ret = {};
+                            if (err) {
+                                logger.log.error('setPermissions: Could not insert new role or update existing role object perm group: ', err);
+                                ret = status.statusCode(3, 'role', 'Error updating the perm group');
+                                deferred.reject(ret);
+                            }
+                            else {
+                                logger.log.debug('setPermissions: Successfully added role object perms.');
+                                ret = status.success('role')
+                                deferred.resolve(ret);
+                            }
+                        });
+                    });
+                } // else
+            } // else
         });
     });
 
@@ -125,6 +128,8 @@ exports.setUserRole = function (user, role) {
     }
     else {
         logger.log.error("setUserRole: User parameter didn't contain correct field: ", user);
+        ret = status.statusCode(1, 'role', 'Error finding user record.');
+        deferred.reject(ret);
     }
 
     // Add the role to the user record.
@@ -134,12 +139,12 @@ exports.setUserRole = function (user, role) {
             var ret = {};
             if (err) {
                 logger.log.error('setUserRole: Error accessing user collection: ', err);
-                ret = status.statusCode(1, 'role', 'Error accessing user collection.');
+                ret = status.statusCode(2, 'role', 'Error accessing user collection.');
                 deferred.reject(ret);
             }
             else if (item === undefined || item === null || item === {}) {
                 logger.log.error('setUserRole: Error finding user record.');
-                ret = status.statusCode(2, 'role', 'Error finding user record.');
+                ret = status.statusCode(3, 'role', 'Error finding user record.');
                 deferred.reject(ret);
             }
             else {
@@ -163,7 +168,7 @@ exports.setUserRole = function (user, role) {
                         var ret = {};
                         if (err) {
                             logger.log.error('setUserRole: Could not update user record: ', err);
-                            ret = status.statusCode(3, 'role', 'Could not update user record.');
+                            ret = status.statusCode(4, 'role', 'Could not update user record.');
                             deferred.reject(ret);
                         }
                         else {
@@ -223,15 +228,27 @@ exports.getUserPerms = function(user, permGroup) {
                 deferred.reject(ret);
             }
             else {
+
+                // Load all the role objects for the role(s) this user is assigned.
                 logger.log.debug("urecord = ", urecord);
                 var roles = [];
                 if (urecord.hasOwnProperty('roles')) {
                     roles = urecord.roles;
                 }
-                for (var i = 0; i < roles.length; i++) {
-                    //  continue here
+                logger.log.debug("roles = ", roles);
 
-                }
+               db.db.collection(col_roles, function(err, collection) {
+                   collection.find({name: {$in:roles}}).toArray(function(err, items) {
+                       logger.log.debug("err = ", err);
+                       logger.log.debug("role records = ", items);
+                       var perms = mergeRolePerms(items, permGroup);
+                       logger.log.debug("Merged perms = ", perms);
+                       //var userRoleRecs = items.toArray();
+                       //logger.log.debug("role records = ", userRoleRecs);
+                   });
+               });  
+
+
             }
 
             deferred.resolve({});
@@ -240,3 +257,35 @@ exports.getUserPerms = function(user, permGroup) {
 
     return deferred.promise;
 }
+
+
+
+// Passing in an array of role objects, return an array of merged permission groups with permissions.
+//
+var mergeRolePerms = function (roleArray, permGroup) {
+
+    var mergedPerms = [];
+
+    for (var i = 0; i < roleArray.length; i++) {
+
+        var pgs = roleArray[i].permGroups;
+
+        if (pgs.hasOwnProperty(permGroup)) {
+            logger.log.debug("Looping within permGroup ", permGroup, " = \n", pgs[permGroup]);
+            for (var perm in pgs[permGroup]) {
+                logger.log.debug("perm ", perm, " = ", pgs[permGroup][perm]);
+                // If the perm doesn't exist in our merged list, just add it.
+                if (!mergedPerms.hasOwnProperty(perm)) {
+                    mergedPerms[perm] = pgs[permGroup][perm];
+                }
+                // Otherwise if the perm is already truthy, keep it, else use the new value.  Effectively a logical OR.
+                else {
+                    mergedPerms[perm] = mergedPerms[perm] ? mergedPerms[perm] : pgs[permGroup][perm];
+                }
+            }
+        }
+    }
+
+    return mergedPerms;
+}
+
