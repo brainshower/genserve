@@ -1,0 +1,5 @@
+*.log
+*.pid
+.git*
+.project
+node_modules/
