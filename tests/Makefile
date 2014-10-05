@@ -6,3 +6,7 @@
 	node role_setPermissions.js | bunyan
 3: 
 	node role_setUserRole.js | bunyan
+4: 
+	node role_getAllRoles.js | bunyan
+5: 
+	node role_getUserRoles.js | bunyan

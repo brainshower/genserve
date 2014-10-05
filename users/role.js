@@ -12,6 +12,42 @@ var Q = require('q');
 var col_roles = "roles";
 
 
+
+// Get all the roles available.  Returns an array of all role objects.
+//
+exports.getAllRoles = function () {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
+    logger.log.info("getAllRoles:");
+
+    // First look for the role to see if it already exists.
+    db.db.collection(col_roles, function(err, collection) {
+        collection.find({}).toArray(function(err, items) {
+            if (err) {
+                var ret = status.statusCode(1, 'role', 'Error acccessing role collection.');
+                deferred.reject(ret);
+            } 
+            else {
+                deferred.resolve(items);
+                /* Uncomment if you want to just return the role names 
+                var roles = [];
+                for (i = 0; i < items.length; i++) {
+                    if (items[i].hasOwnProperty('name')) { 
+                        roles.push(items[i].name);
+                    }
+                }
+                deferred.resolve(roles);
+                */
+            }
+        });
+    });
+
+    return deferred.promise;
+}
+
+
 // Set permissions for a given role.
 //
 exports.setPermissions = function (role, permGroup, perms) {
@@ -99,6 +135,58 @@ exports.setPermissions = function (role, permGroup, perms) {
                         });
                     });
                 } // else
+            } // else
+        });
+    });
+
+    return deferred.promise;
+}
+
+
+exports.getUserRoles = function (user) {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
+    logger.log.info("getUserRoles: Getting all roles for user: ",  user);
+
+    var search = {};
+    if (user.hasOwnProperty('uid')) {
+        search._id = db.BSON.ObjectID(user.uid);
+        logger.log.debug("getUserRoles: Searching for user record by UID.");
+    }
+    else if (user.hasOwnProperty('username')) {
+        search.username = user.username;
+        logger.log.debug("getUserRoles: Searching for user record by username.");
+    }
+    else {
+        logger.log.error("getUserRoles: User parameter didn't contain correct field: ", user);
+        ret = status.statusCode(1, 'role', 'Error finding user record.');
+        deferred.reject(ret);
+    }
+
+    // Add the role to the user record.
+    db.db.collection(globals.col_users, function(err, collection) {
+        collection.findOne(search, function(err, item) {
+
+            var ret = {};
+            if (err) {
+                logger.log.error('getUserRoles: Error accessing user collection: ', err);
+                ret = status.statusCode(2, 'role', 'Error accessing user collection.');
+                deferred.reject(ret);
+            }
+            else if (item === undefined || item === null || item === {}) {
+                logger.log.error('getUserRoles: Error finding user record.');
+                ret = status.statusCode(3, 'role', 'Error finding user record.');
+                deferred.reject(ret);
+            }
+            else {
+                if (!item.hasOwnProperty('roles')) {
+                    deferred.resolve([]);
+                }
+                else {
+                    deferred.resolve(item.roles);
+                }
             } // else
         });
     });
