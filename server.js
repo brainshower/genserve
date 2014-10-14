@@ -5,7 +5,8 @@ var express = require('express'),
     globals = require('./global/globals'),
     logger = require('./global/logger'),
     node = require('./routes/node'),
-    users = require('./users/users');
+    users = require('./users/users'),
+    roles = require('./users/roles');
  
 var app = express();
 
@@ -37,29 +38,36 @@ app.use(function (req, res, next) {
 });
 
 
+// Setup all the API routes ---------------------------------------------------------------
 
-// Manage node API 
+// Node API 
 app.post('/node/all', node.findAllNodes);
 app.post('/node/id/:id', node.findNodeById);
 app.post('/node', node.createNode);
 app.post('/node/update/:id', node.updateNode);
 app.post('/node/delete/:id', node.deleteNode);
 
-// Manage users API
-//app.get('/users', users.findAll);
-//app.get('/login/:id', users.findById);
-//app.get('/users/email/:email', users.findByEmail);
+// User and authentication API
 app.post('/login/create', users.createUser); // Create a user
 app.post('/login/auth', users.authUser); // Authenticate user
 app.post('/login/reauth', users.reAuthUser); // Reauthenticate user
 app.post('/login/logout', users.logoutUser); // Logout a user
-//app.put('/login/:id', users.updateItem); // Change a user
-//app.delete('/users:id', users.deleteItem);
+
+// Role API
+app.get('/admin/role/getroles', roles.getAllRoles); // Get all the role objects.
+app.get('/admin/role/getusers', roles.getUsersAndRoles); // Get all users and associated role objects.
+app.post('/admin/role/create', roles.createRole); // Create a new role 
+app.post('/admin/role/delete', roles.deleteRole); // Delete a role 
+app.post('/admin/role/permgroup/create', roles.createPermGroup); // Create a permissions group
+app.post('/admin/role/permgroup/delete', roles.deletePermGroup); // Delete a permissions group
+app.post('/admin/role/perm/set', roles.setPerm); // Set a permission
+app.post('/admin/role/perm/delete', roles.deletePerm); // Delete a permission
+app.post('/admin/role/user/assign', roles.assignUserRole); // Assign a role to a user
+app.post('/admin/role/user/remove', roles.removeUserRole); // Remove a role from a user
 
 
 // Start the web server.
 //
-
 logger.log.info("Opening the database.");
 dbopen.openDB(globals.dbname).then(
   function (dbObj) {

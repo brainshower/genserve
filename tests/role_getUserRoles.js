@@ -1,4 +1,4 @@
-var roles = require("../users/role");
+var roles = require("../users/role_api");
 var logger = require("../global/logger");
 var dbopen = require("../global/dbopen");
 var globals = require("../global/globals");

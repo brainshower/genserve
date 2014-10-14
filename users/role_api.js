@@ -6,11 +6,138 @@ var globals = require('../global/globals');
 var logger = require('../global/logger');
 var status = require('../global/status');
 var dbopen = require('../global/dbopen');
+var _ = require('lodash');
 var Q = require('q');
 
 // Relevant collection in the database
 var col_roles = "roles";
 
+
+// Create a new role
+//
+exports.createRole = function (roleName) {
+
+    var newRoleObject;
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
+    logger.log.info('createRole: Creating new role object: ', roleName);
+    var newRoleObject = {
+        name : roleName,
+        permGroups : {},
+    };
+
+    db.db.collection(col_roles, function(err, collection) {
+        collection.insert(newRoleObject, {safe:true}, function(err, result) {
+            var ret = {};
+            if (err) {
+                logger.log.error('createRole: Could not insert new role: ', err);
+                ret = status.statusCode(1, 'role', 'Error inserting new role');
+                deferred.reject(ret);
+            }
+            else {
+                logger.log.debug('createRole: Successfully added new role object.');
+                ret = status.success('role')
+                deferred.resolve(ret);
+            }
+        });
+    });
+
+    return deferred.promise;
+}
+
+
+// Delete a new role
+//
+exports.deleteRole = function (roleName) {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
+    logger.log.info('deleteRole: Deleting role object: ', roleName);
+
+    db.db.collection(col_roles, function(err, collection) {
+        collection.remove({name: roleName}, {safe:true}, function(err, result) {
+            var ret = {};
+            if (err) {
+                logger.log.error('deleteRole: Could not delete role: ', err);
+                ret = status.statusCode(1, 'role', 'Error deleting role');
+                deferred.reject(ret);
+            }
+            else {
+                logger.log.debug('deleteRole: Successfully deleted role object.');
+                ret = status.success('role')
+                deferred.resolve(ret);
+            }
+        });
+    });
+
+    return deferred.promise;
+}
+
+
+// Create a new permissions group
+//
+exports.createPermGroup = function (roleName, permGroupName) {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+    var upd = {};
+    upd.$set = {};
+    upd.$set["permGroups." + permGroupName] = {};
+
+    logger.log.info('createPermGroup: Creating new permissions group (role, pg): ', roleName, permGroupName);
+
+    db.db.collection(col_roles, function(err, collection) {
+        collection.findAndModify({name: roleName}, [['_id','asc']], upd, {upsert: true, safe:true}, function(err, result) {
+            var ret = {};
+            if (err) {
+                logger.log.error('createPermGroup: Could not insert new perm group: ', err);
+                ret = status.statusCode(1, 'role', 'Error inserting new perm group');
+                deferred.reject(ret);
+            }
+            else {
+                logger.log.debug('createPermGroup: Successfully added new perm group.');
+                ret = status.success('role')
+                deferred.resolve(ret);
+            }
+        });
+    });
+
+    return deferred.promise;
+}
+
+
+// Delete a perm group
+//
+exports.deletePermGroup = function (roleName, permGroupName) {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+    var upd = {};
+    upd.$unset = {};
+    upd.$unset["permGroups." + permGroupName] = "";
+
+    logger.log.info('deletePermGroup: Deleting perm group (role, pg): ', roleName, permGroupName);
+
+    db.db.collection(col_roles, function(err, collection) {
+        collection.findAndModify({name: roleName}, [['_id','asc']], upd, {safe:true}, function(err, result) {
+            var ret = {};
+            if (err) {
+                logger.log.error('deletePermGroup: Could not delete perm group: ', err);
+                ret = status.statusCode(1, 'role', 'Error deleting perm group');
+                deferred.reject(ret);
+            }
+            else {
+                logger.log.debug('deletePermGroup: Successfully deleted perm group.');
+                ret = status.success('role')
+                deferred.resolve(ret);
+            }
+        });
+    });
+
+    return deferred.promise;
+}
 
 
 // Get all the roles available.  Returns an array of all role objects.
@@ -24,7 +151,7 @@ exports.getAllRoles = function () {
 
     // First look for the role to see if it already exists.
     db.db.collection(col_roles, function(err, collection) {
-        collection.find({}).toArray(function(err, items) {
+        collection.find({}, {sort: "name"}).toArray(function(err, items) {
             if (err) {
                 var ret = status.statusCode(1, 'role', 'Error acccessing role collection.');
                 deferred.reject(ret);
@@ -143,6 +270,41 @@ exports.setPermissions = function (role, permGroup, perms) {
 }
 
 
+// Delete a permission from a role and permission group. 
+//
+exports.deletePermission = function (roleName, permGroupName, permName) {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
+    var upd = {};
+    upd.$unset = {};
+    upd.$unset["permGroups." + permGroupName + "." + permName] = "";
+
+    logger.log.info('deletePermssion: Deleting perm (role, pg, perm): ', roleName, permGroupName, permName);
+
+    db.db.collection(col_roles, function(err, collection) {
+        collection.findAndModify({name: roleName}, [['_id','asc']], upd, {safe:true}, function(err, result) {
+            var ret = {};
+            if (err) {
+                logger.log.error('deletePermssion: Could not delete permission: ', err);
+                ret = status.statusCode(1, 'role', 'Error deleting permission');
+                deferred.reject(ret);
+            }
+            else {
+                logger.log.debug('deletePermission: Successfully deleted permission.');
+                ret = status.success('role')
+                deferred.resolve(ret);
+            }
+        });
+    });
+
+    return deferred.promise;
+}
+
+
+// Get the roles assigned to a single user.
+//
 exports.getUserRoles = function (user) {
 
     var db = dbopen.getDB();
@@ -194,6 +356,50 @@ exports.getUserRoles = function (user) {
     return deferred.promise;
 }
 
+
+// Get all users and their associated roles
+//
+exports.getUsersAndRoles = function() {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
+    logger.log.info("getUsersAndRoles: Getting all users and their associated roles.");
+
+    db.db.collection(globals.col_users, function(err, collection) {
+        collection.find({},{sort: "username"}).toArray(function(err, items) {
+
+            var ret = {};
+            if (err) {
+                logger.log.error('getUsersAndRoles: Error accessing user collection: ', err);
+                ret = status.statusCode(2, 'role', 'Error accessing user collection.');
+                deferred.reject(ret);
+            }
+            else if (items === undefined || items === null || items === {}) {
+                logger.log.error('getUsersAndRoles: Error finding user record.');
+                ret = status.statusCode(3, 'role', 'Error finding user record.');
+                deferred.reject(ret);
+            }
+            else {
+                var usersAndRoles = [];
+                for (i = 0; i < items.length; i++) {
+                    var user = {};
+                    user.uid = items[i]._id;
+                    user.username = items[i].username;
+                    if (items[i].hasOwnProperty('roles')) {
+                        user.roles = items[i].roles;
+                    }
+                    usersAndRoles.push(user);
+                }
+                deferred.resolve(usersAndRoles);
+
+            } // else
+        });
+    });
+
+    return deferred.promise;
+}
+ 
 
 // Set a user to have a specific role.
 // user should be an object with property name "uid" with the user ID, or "username" with the user's name.
@@ -276,6 +482,83 @@ exports.setUserRole = function (user, role) {
 }
 
 
+// Remove a role from a specific user.
+// user should be an object with property name "uid" with the user ID, or "username" with the user's name.
+//
+exports.removeUserRole = function (user, role) {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
+    logger.log.info("removeUserRole: Remove role ", role, " for user: ",  user);
+
+    var search = {};
+    if (user.hasOwnProperty('uid')) {
+        search._id = db.BSON.ObjectID(user.uid);
+        logger.log.debug("removeUserRole: Searching for user record by UID.");
+    }
+    else if (user.hasOwnProperty('username')) {
+        search.username = user.username;
+        logger.log.debug("removeUserRole: Searching for user record by username.");
+    }
+    else {
+        logger.log.error("removeUserRole: User parameter didn't contain correct field: ", user);
+        ret = status.statusCode(1, 'role', 'Error finding user record.');
+        deferred.reject(ret);
+    }
+
+    // Get the user record.
+    db.db.collection(globals.col_users, function(err, collection) {
+        collection.findOne(search, function(err, item) {
+
+            var ret = {};
+            if (err) {
+                logger.log.error('removeUserRole: Error accessing user collection: ', err);
+                ret = status.statusCode(2, 'role', 'Error accessing user collection.');
+                deferred.reject(ret);
+            }
+            else if (item === undefined || item === null || item === {}) {
+                logger.log.error('removeUserRole: Error finding user record.');
+                ret = status.statusCode(3, 'role', 'Error finding user record.');
+                deferred.reject(ret);
+            }
+            else {
+
+                if (!item.hasOwnProperty('roles')) {
+                    logger.log.debug('removeUserRole: User does not have any roles, so could not remove. Still OK.');
+                    ret = status.success('role')
+                    deferred.resolve(ret);
+                } 
+
+                // Remove the role, if it happens to exist.
+                item.roles = _.without(item.roles, role);
+   
+                // Push the user record back to the datbase.
+                db.db.collection(globals.col_users, function(err, collection) {
+                    collection.update(search, item, {safe:true}, function(err, result) {
+                        var ret = {};
+                        if (err) {
+                            logger.log.error('removeUserRole: Could not update user record: ', err);
+                            ret = status.statusCode(4, 'role', 'Could not update user record.');
+                            deferred.reject(ret);
+                        }
+                        else {
+                            logger.log.debug('removeUserRole: Successfully removed role from user record.');
+                            ret = status.success('role')
+                            deferred.resolve(ret);
+                        }
+                     });
+                });
+
+            } // else
+
+        });
+    });
+
+    return deferred.promise;
+}
+
+
 // Return the list of all permissions available to a user for a given permission group.
 // This will go across all roles.
 // user should be an object with property name "uid" with the user ID, or "username" with the user's name.
@@ -318,21 +601,15 @@ exports.getUserPerms = function(user, permGroup) {
             else {
 
                 // Load all the role objects for the role(s) this user is assigned.
-                logger.log.debug("urecord = ", urecord);
                 var roles = [];
                 if (urecord.hasOwnProperty('roles')) {
                     roles = urecord.roles;
                 }
-                logger.log.debug("roles = ", roles);
 
                db.db.collection(col_roles, function(err, collection) {
                    collection.find({name: {$in:roles}}).toArray(function(err, items) {
-                       logger.log.debug("err = ", err);
-                       logger.log.debug("role records = ", items);
                        var perms = mergeRolePerms(items, permGroup);
-                       logger.log.debug("Merged perms = ", perms);
-                       //var userRoleRecs = items.toArray();
-                       //logger.log.debug("role records = ", userRoleRecs);
+                       deferred.resolve(perms);
                    });
                });  
 
