@@ -13,38 +13,64 @@ var Q = require('q');
 // Create a new node.  Pass in title, body, and optionally an extender function for adding more fields.
 //
 exports.createNode = function (title, body, uid, extender) {
+
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
     var node = {
       title : title,
       body : (body !== null && body !== undefined) ? body : null,
       creationDate : moment.utc(new Date(Date.now())).toString(),
       type : "basic",
-      uid: uid,
     };
 
-    var db = dbopen.getDB();
-    var deferred = Q.defer();
-
-    // Call an extension function to further manipulate the node object before insertion.
-    // Extender must at least set the type of node object.
-    if (extender !== null && extender !== undefined) {
-        node = extender(node);
+    // If a uid was passed in, find the associated username an put into the node object.
+    if (uid) {
+        node.uid = uid;
+        db.db.collection(globals.col_users, function(err, collection) {
+            collection.findOne({'_id': new db.BSON.ObjectID(uid)}, function(err, item) {
+                var ret = {};
+                if (err) {
+                    ret = status.statusCode(1, 'nodeapi', 'Error finding user uid: ' + uid);
+                    deferred.reject(ret);
+                }
+                else { 
+                    if (item.hasOwnProperty('username')) {
+                        node.username = item.username;
+                    }
+                    predicate();
+                }
+    
+            });
+        });
+    }
+    else {
+        context.predicate();
     }
 
-    // Insert into the database.
-    db.db.collection(globals.col_nodes, function(err, collection) {
-        collection.insert(node, {safe:true}, function(err, result) {
-            var ret = {};
-            if (err) {
-                ret = status.statusCode(1, 'nodeapi', 'Error has occurred on insertion')
-                deferred.reject(ret);
-            } 
-            else {
-                ret = status.success('nodeapi')
-                ret.node = result[0];
-                deferred.resolve(ret);
-            }
+    var predicate = function() {
+        // Call an extension function to further manipulate the node object before insertion.
+        // Extender must at least set the type of node object.
+        if (extender !== null && extender !== undefined) {
+            node = extender(node);
+        }
+    
+        // Insert into the database.
+        db.db.collection(globals.col_nodes, function(err, collection) {
+            collection.insert(node, {safe:true}, function(err, result) {
+                var ret = {};
+                if (err) {
+                    ret = status.statusCode(2, 'nodeapi', 'Error has occurred on insertion')
+                    deferred.reject(ret);
+                } 
+                else {
+                    ret = status.success('nodeapi')
+                    ret.node = result[0];
+                    deferred.resolve(ret);
+                }
+            });
         });
-    });
+    };
 
     return deferred.promise;
 }
@@ -117,18 +143,23 @@ exports.findNodeById = function(nid) {
 };
 
 
-// Find all nodes by a content type.
+// Find all nodes by a content type.  If type not passed in, all node types are found.
 // 
 exports.findNodesByType = function(type) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
 
+    var search = {};
+    if (type) {
+        search.type = type;
+    }
+    
     db.db.collection(globals.col_nodes, function(err, collection) {
-        collection.find({'type':type}).toArray(function(err, items) {
+        collection.find(search).toArray(function(err, items) {
             var ret = {};
             if (err) {
-                ret = status.statusCode(1, 'nodeapi', 'Error finding nodes');
+                ret = status.statusCode(1, 'nodeapi', 'Error finding nodes.');
                 deferred.reject(ret); 
             }
             else {
