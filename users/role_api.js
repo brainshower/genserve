@@ -568,7 +568,7 @@ exports.getUserPerms = function(user, permGroup) {
     var db = dbopen.getDB();
     var deferred = Q.defer();
 
-    logger.log.info("getUserParms: Getting permGroups for user.");
+    logger.log.info("getUserParms: Getting permGroups for permission group: ", permGroup);
 
     var search = {};
     if (user.hasOwnProperty('uid')) {
@@ -606,17 +606,13 @@ exports.getUserPerms = function(user, permGroup) {
                     roles = urecord.roles;
                 }
 
-               db.db.collection(col_roles, function(err, collection) {
-                   collection.find({name: {$in:roles}}).toArray(function(err, items) {
-                       var perms = mergeRolePerms(items, permGroup);
-                       deferred.resolve(perms);
-                   });
-               });  
-
-
-            }
-
-            deferred.resolve({});
+                db.db.collection(col_roles, function(err, collection) {
+                    collection.find({name: {$in:roles}}).toArray(function(err, items) {
+                        var perms = mergeRolePerms(items, permGroup);
+                        deferred.resolve(perms);
+                    });
+                });  
+            } // else
         });
     });
 
@@ -636,21 +632,16 @@ var mergeRolePerms = function (roleArray, permGroup) {
         var pgs = roleArray[i].permGroups;
 
         if (pgs.hasOwnProperty(permGroup)) {
-            logger.log.debug("Looping within permGroup ", permGroup, " = \n", pgs[permGroup]);
             for (var perm in pgs[permGroup]) {
-                logger.log.debug("perm ", perm, " = ", pgs[permGroup][perm]);
-                // If the perm doesn't exist in our merged list, just add it.
-                if (!mergedPerms.hasOwnProperty(perm)) {
-                    mergedPerms[perm] = pgs[permGroup][perm];
-                }
-                // Otherwise if the perm is already truthy, keep it, else use the new value.  Effectively a logical OR.
-                else {
-                    mergedPerms[perm] = mergedPerms[perm] ? mergedPerms[perm] : pgs[permGroup][perm];
+                if (pgs[permGroup][perm] === true) {
+                    mergedPerms.push(perm);
+                    //mergedPerms[perm] = pgs[permGroup][perm];
+                    //mergedPerms[perm] = mergedPerms[perm] ? mergedPerms[perm] : pgs[permGroup][perm];
                 }
             }
         }
     }
 
-    return mergedPerms;
+    return _.uniq(mergedPerms);
 }
 

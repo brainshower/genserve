@@ -4,14 +4,14 @@ var dbopen = require("../global/dbopen");
 var globals = require("../global/globals");
 
 //var dbname = globals.dbname;
-var dbname = "test";
+var dbname = "demo";
 
 logger.log.info("Testing getUserPerms...");
 dbopen.openDB(dbname).then(
 
     function (dbObj) {
 
-        roles.getUserPerms({username: "mgenovese"}, "jobs").then(
+        roles.getUserPerms({username: "mgenovese"}, "basic").then(
             function (success) {
                 logger.log.info("Success, bitches!", success);
             },

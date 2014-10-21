@@ -5,8 +5,11 @@ Node - Handle all basic interactions with a node, and include linkage to other c
 
 var globals = require('../global/globals');
 var status = require('../global/status');
+var logger = require('../global/logger');
 var dbopen = require('../global/dbopen');
+var roleapi = require('../users/role_api');
 var moment = require('moment');
+var async = require('async');
 var Q = require('q');
 
 
@@ -64,9 +67,21 @@ exports.createNode = function (title, body, uid, extender) {
                     deferred.reject(ret);
                 } 
                 else {
-                    ret = status.success('nodeapi')
-                    ret.node = result[0];
-                    deferred.resolve(ret);
+                    // Get the permissions for this new node and send back with the object.
+                    roleapi.getUserPerms({uid : uid}, node.type).then(
+                        function(success) {
+                            ret = status.success('nodeapi')
+                            ret.node = result[0];
+                            ret.node.perms = success; // attach the returned permissions to the node object.
+                            deferred.resolve(ret);
+                        },
+                        function (fail) {
+                            // No permissions found.  Just send back (probably should return anonymous role perms at some point.)
+                            ret = status.success('nodeapi')
+                            ret.node = result[0];
+                            deferred.resolve(ret);
+                        }
+                    );
                 }
             });
         });
@@ -79,7 +94,7 @@ exports.createNode = function (title, body, uid, extender) {
 // Update an existing node.  Pass in a node object (only fields to be updated need be set), and
 // extender function for updating other fields.
 //
-exports.updateNode = function (nid, object, extender) {
+exports.updateNode = function (nid, object, extender, uid) {
 
     var node = {};
     var db = dbopen.getDB();
@@ -116,9 +131,9 @@ exports.updateNode = function (nid, object, extender) {
 }
 
 
-// Find a node by its ID
+// Find a node by its ID.
 // 
-exports.findNodeById = function(nid) {
+exports.findNodeById = function(nid, uid) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
@@ -131,9 +146,20 @@ exports.findNodeById = function(nid) {
                 deferred.reject(ret);
             }  
             else {
-                ret = status.success('nodeapi')
-                ret.node = item;
-                deferred.resolve(ret);
+                roleapi.getUserPerms({uid : uid}, node.type).then(
+                    function(success) {
+                        ret = status.success('nodeapi')
+                        ret.node = item;
+                        ret.node.perms = success; // attach the returned permissions to the node object.
+                        deferred.resolve(ret);
+                    },
+                    function (fail) {
+                        // No permissions found.  Just send back (probably should return anonymous role perms at some point.)
+                        ret = status.success('nodeapi')
+                        ret.node = item;
+                        deferred.resolve(ret);
+                    }
+                );
             }
  
         });
@@ -145,7 +171,7 @@ exports.findNodeById = function(nid) {
 
 // Find all nodes by a content type.  If type not passed in, all node types are found.
 // 
-exports.findNodesByType = function(type) {
+exports.findNodesByType = function(type, uid) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
@@ -163,10 +189,34 @@ exports.findNodesByType = function(type) {
                 deferred.reject(ret); 
             }
             else {
+                // Attach permission information to each node object.
                 ret = status.success('nodeapi')
                 ret.nodes = items;
-                deferred.resolve(ret);
-            }
+                var i = 0;
+                async.whilst(
+                    // Test condition
+                    function() { return (i < ret.nodes.length) }, 
+                    // Called each iteration
+                    function(callback) {
+                        i++;
+                        roleapi.getUserPerms({uid : uid}, ret.nodes[i-1].type || "basic").then(
+                            function(success) {
+                                ret.nodes[i-1].perms = [];
+                                ret.nodes[i-1].perms = success;
+                                callback(); 
+                            },
+                            function (fail) {
+                                // No permissions found.  Just send back (probably should return anonymous role perms at some point.)
+                                callback(); 
+                            }
+                        );
+                    },
+                    // Final function called when above functions are done.
+                    function() {
+                        deferred.resolve(ret);
+                    }
+                );
+            } // else
         });
     });
 
@@ -176,7 +226,7 @@ exports.findNodesByType = function(type) {
 
 // Delete a node by passing in the node ID.
 // 
-exports.deleteNode = function(nid, extender) {
+exports.deleteNode = function(nid, extender, uid) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
