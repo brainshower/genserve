@@ -58,12 +58,13 @@ app.get('/admin/role/getroles', roles.getAllRoles); // Get all the role objects.
 app.get('/admin/role/getusers', roles.getUsersAndRoles); // Get all users and associated role objects.
 app.post('/admin/role/create', roles.createRole); // Create a new role 
 app.post('/admin/role/delete', roles.deleteRole); // Delete a role 
-app.post('/admin/role/permgroup/create', roles.createPermGroup); // Create a permissions group
-app.post('/admin/role/permgroup/delete', roles.deletePermGroup); // Delete a permissions group
-app.post('/admin/role/perm/set', roles.setPerm); // Set a permission
-app.post('/admin/role/perm/delete', roles.deletePerm); // Delete a permission
 app.post('/admin/role/user/assign', roles.assignUserRole); // Assign a role to a user
 app.post('/admin/role/user/remove', roles.removeUserRole); // Remove a role from a user
+app.post('/admin/role/perm/set', roles.setPerm); // Set a permission
+// The following role operations are not exposed to the API.  Permission groups and permissions are defined programmatically by other entities.
+//app.post('/admin/role/permgroup/create', roles.createPermGroup); // Create a permissions group
+//app.post('/admin/role/permgroup/delete', roles.deletePermGroup); // Delete a permissions group
+//app.post('/admin/role/perm/delete', roles.deletePerm); // Delete a permission
 
 
 // Start the web server.

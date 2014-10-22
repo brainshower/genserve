@@ -13,6 +13,39 @@ var Q = require('q');
 var col_roles = "roles";
 
 
+// Registry of all permissions
+var permissions_registry = {};
+
+
+// Create the default permissions group object that will be used
+// when new roles are created.  All permissions initialized to false.
+//
+var createDefaultPermGroups = function() {
+
+    var permGroups = {};
+
+    for (var permGroup in permissions_registry) {
+        if (permissions_registry.hasOwnProperty(permGroup)) {
+            permGroups[permGroup] = {};
+            var perms = permissions_registry[permGroup];
+            for (var i = 0; i < perms.length; i++) {
+                var perm = perms[i];
+                permGroups[permGroup][perm] = false;
+            }
+        }
+    }
+    return permGroups;
+}
+
+
+// Register the permissions group and associated permissions (array).
+// This is called by any entity upon initialization that has permission.
+//
+exports.registerPermissions = function(permGroup, perms) {
+    permissions_registry[permGroup] = perms;
+}
+
+
 // Create a new role
 //
 exports.createRole = function (roleName) {
@@ -24,7 +57,7 @@ exports.createRole = function (roleName) {
     logger.log.info('createRole: Creating new role object: ', roleName);
     var newRoleObject = {
         name : roleName,
-        permGroups : {},
+        permGroups : createDefaultPermGroups(),
     };
 
     db.db.collection(col_roles, function(err, collection) {
@@ -207,7 +240,7 @@ exports.setPermissions = function (role, permGroup, perms) {
                     logger.log.info('setPermissions: Creating new role object: ', role);
                     var newRoleObject = {
                         name : role,
-                        permGroups : {},
+                        permGroups : createDefaultPermGroups(),
                     };
                     newRoleObject.permGroups[permGroup] = perms;
                     logger.log.debug('New role object: ',  newRoleObject);

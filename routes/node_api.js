@@ -13,6 +13,13 @@ var async = require('async');
 var Q = require('q');
 
 
+// Initialize the permissions for basic nodes.
+var node_type = "basic";
+var node_perms = ['read_all', 'read_own', 'create', 'delete_own', 'delete_any', 'edit_own', 'edit_any'];
+
+roleapi.registerPermissions(node_type, node_perms);
+
+
 // Create a new node.  Pass in title, body, and optionally an extender function for adding more fields.
 //
 exports.createNode = function (title, body, uid, extender) {
@@ -24,7 +31,7 @@ exports.createNode = function (title, body, uid, extender) {
       title : title,
       body : (body !== null && body !== undefined) ? body : null,
       creationDate : moment.utc(new Date(Date.now())).toString(),
-      type : "basic",
+      type : node_type,
     };
 
     // If a uid was passed in, find the associated username an put into the node object.
@@ -199,7 +206,7 @@ exports.findNodesByType = function(type, uid) {
                     // Called each iteration
                     function(callback) {
                         i++;
-                        roleapi.getUserPerms({uid : uid}, ret.nodes[i-1].type || "basic").then(
+                        roleapi.getUserPerms({uid : uid}, ret.nodes[i-1].type || node_type).then(
                             function(success) {
                                 ret.nodes[i-1].perms = [];
                                 ret.nodes[i-1].perms = success;
