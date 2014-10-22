@@ -641,19 +641,19 @@ exports.getUserPerms = function(user, permGroup) {
     var db = dbopen.getDB();
     var deferred = Q.defer();
 
-    logger.log.info("getUserParms: Getting permGroups for permission group: ", permGroup);
+    logger.log.info("getUserPerms: Getting permGroups for permission group: ", permGroup);
 
     var search = {};
     if (user.hasOwnProperty('uid')) {
         search._id = db.BSON.ObjectID(user.uid);
-        logger.log.debug("getUserParms: Searching for user record by UID.");
+        logger.log.debug("getUserPerms: Searching for user record by UID.");
     }
     else if (user.hasOwnProperty('username')) {
         search.username = user.username;
-        logger.log.debug("getUserParms: Searching for user record by username.");
+        logger.log.debug("getUserPerms: Searching for user record by username.");
     }
     else {
-        logger.log.error("getUserParms: User parameter didn't contain correct field: ", user);
+        logger.log.error("getUserPerms: User parameter didn't contain correct field: ", user);
     }
 
     // Get the user record.
