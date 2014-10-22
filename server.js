@@ -6,7 +6,8 @@ var express = require('express'),
     logger = require('./global/logger'),
     node = require('./routes/node'),
     users = require('./users/users'),
-    roles = require('./users/roles');
+    roles = require('./users/roles'),
+    roleapi = require('./users/role_api');
  
 var app = express();
 
@@ -73,10 +74,17 @@ logger.log.info("Opening the database.");
 dbopen.openDB(globals.dbname).then(
   function (dbObj) {
       logger.log.info("Successfully opened the database.");
-      logger.log.info('Listening on port 3000...');
-      app.listen(3000);
 
-      dbObj.close();
+      roleapi.getAllRoles().then(
+          function() {
+              logger.log.info("Synchronized all roles and permissions from the database.");
+
+              logger.log.info('Listening on port 3000...');
+              app.listen(3000);
+              dbObj.close();
+          }
+      );
+
   }
 );
 

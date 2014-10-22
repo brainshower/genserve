@@ -10,6 +10,7 @@ var dbopen = require('../global/dbopen');
 var roleapi = require('../users/role_api');
 var moment = require('moment');
 var async = require('async');
+var _ = require('lodash');
 var Q = require('q');
 
 
@@ -59,39 +60,44 @@ exports.createNode = function (title, body, uid, extender) {
     }
 
     var predicate = function() {
+
         // Call an extension function to further manipulate the node object before insertion.
         // Extender must at least set the type of node object.
         if (extender !== null && extender !== undefined) {
             node = extender(node);
         }
     
-        // Insert into the database.
-        db.db.collection(globals.col_nodes, function(err, collection) {
-            collection.insert(node, {safe:true}, function(err, result) {
+        // Check if we have create permissions. This is done after the extender function call to ensure
+        // we know the correct node type (which may have been changed by the extender function).
+        roleapi.getUserPerms({uid : uid}, node.type).then(
+            function (perms) {
                 var ret = {};
-                if (err) {
-                    ret = status.statusCode(2, 'nodeapi', 'Error has occurred on insertion')
-                    deferred.reject(ret);
-                } 
+                if (_.contains(perms, 'create')) {
+
+                    // Insert into the database.
+                    db.db.collection(globals.col_nodes, function(err, collection) {
+                        collection.insert(node, {safe:true}, function(err, result) {
+                            if (err) {
+                                ret = status.statusCode(2, 'nodeapi', 'Error has occurred on insertion')
+                                deferred.reject(ret);
+                            } 
+                            else {
+                                // Success!  Not send the permissions back with the object.
+                                ret = status.success('nodeapi')
+                                ret.node = result[0];
+                                ret.node.perms = perms; // attach the  permissions to the node object.
+                                deferred.resolve(ret);
+                            }
+                        });
+                    }); // insert
+                } // create
                 else {
-                    // Get the permissions for this new node and send back with the object.
-                    roleapi.getUserPerms({uid : uid}, node.type).then(
-                        function(success) {
-                            ret = status.success('nodeapi')
-                            ret.node = result[0];
-                            ret.node.perms = success; // attach the returned permissions to the node object.
-                            deferred.resolve(ret);
-                        },
-                        function (fail) {
-                            // No permissions found.  Just send back (probably should return anonymous role perms at some point.)
-                            ret = status.success('nodeapi')
-                            ret.node = result[0];
-                            deferred.resolve(ret);
-                        }
-                    );
+                    // Do not have permissions to create the object.
+                    ret = status.statusCode(3, 'nodeapi', 'No permission to create.')
+                    deferred.reject(ret);
                 }
-            });
-        });
+            } // function
+        ); // roleapi
     };
 
     return deferred.promise;

@@ -16,6 +16,11 @@ var col_roles = "roles";
 // Registry of all permissions
 var permissions_registry = {};
 
+// Mirror of roles, perm groups, and permissions.  This is kept as a read cache for quick permission checks by
+// other entities.
+//
+var role_database = {};
+
 
 // Create the default permissions group object that will be used
 // when new roles are created.  All permissions initialized to false.
@@ -70,8 +75,13 @@ exports.createRole = function (roleName) {
             }
             else {
                 logger.log.debug('createRole: Successfully added new role object.');
-                ret = status.success('role')
-                deferred.resolve(ret);
+                ret = status.success('role');
+                // Update the local role cache
+                exports.getAllRoles().then(
+                    function() {
+                        deferred.resolve(ret);
+                    }
+                );
             }
         });
     });
@@ -100,7 +110,12 @@ exports.deleteRole = function (roleName) {
             else {
                 logger.log.debug('deleteRole: Successfully deleted role object.');
                 ret = status.success('role')
-                deferred.resolve(ret);
+                // Update the local role cache
+                exports.getAllRoles().then(
+                    function() {
+                        deferred.resolve(ret);
+                    }
+                );
             }
         });
     });
@@ -132,7 +147,12 @@ exports.createPermGroup = function (roleName, permGroupName) {
             else {
                 logger.log.debug('createPermGroup: Successfully added new perm group.');
                 ret = status.success('role')
-                deferred.resolve(ret);
+                // Update the local role cache
+                exports.getAllRoles().then(
+                    function() {
+                        deferred.resolve(ret);
+                    }
+                );
             }
         });
     });
@@ -164,7 +184,12 @@ exports.deletePermGroup = function (roleName, permGroupName) {
             else {
                 logger.log.debug('deletePermGroup: Successfully deleted perm group.');
                 ret = status.success('role')
-                deferred.resolve(ret);
+                // Update the local role cache
+                exports.getAllRoles().then(
+                    function() {
+                        deferred.resolve(ret);
+                    }
+                );
             }
         });
     });
@@ -190,6 +215,7 @@ exports.getAllRoles = function () {
                 deferred.reject(ret);
             } 
             else {
+                role_database = items; // update the local version of the roles / permissions
                 deferred.resolve(items);
                 /* Uncomment if you want to just return the role names 
                 var roles = [];
@@ -254,8 +280,13 @@ exports.setPermissions = function (role, permGroup, perms) {
                             }
                             else {
                                 logger.log.debug('setPermissions: Successfully added role object perms.');
-                                ret = status.success('role')
-                                deferred.resolve(ret);
+                                ret = status.success('role');
+                                // Success.  Now before exiting, force a reload of the roles & permissions to update the cache.
+                                exports.getAllRoles().then(
+                                    function() {
+                                        deferred.resolve(ret);
+                                    }
+                                );
                             }
                         });
                     });
@@ -289,8 +320,12 @@ exports.setPermissions = function (role, permGroup, perms) {
                             }
                             else {
                                 logger.log.debug('setPermissions: Successfully added role object perms.');
-                                ret = status.success('role')
-                                deferred.resolve(ret);
+                                ret = status.success('role');
+                                exports.getAllRoles().then(
+                                    function() {
+                                        deferred.resolve(ret);
+                                    }
+                                );
                             }
                         });
                     });
@@ -326,8 +361,13 @@ exports.deletePermission = function (roleName, permGroupName, permName) {
             }
             else {
                 logger.log.debug('deletePermission: Successfully deleted permission.');
-                ret = status.success('role')
-                deferred.resolve(ret);
+                ret = status.success('role');
+                // Update local role cache object
+                exports.getAllRoles().then(
+                    function() {
+                        deferred.resolve(ret);
+                    }
+                );
             }
         });
     });
