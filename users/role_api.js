@@ -16,9 +16,9 @@ var col_roles = "roles";
 // Registry of all permissions
 var permissions_registry = {};
 
+
 // Mirror of roles, perm groups, and permissions.  This is kept as a read cache for quick permission checks by
 // other entities.
-//
 var role_database = {};
 
 
@@ -40,6 +40,60 @@ var createDefaultPermGroups = function() {
         }
     }
     return permGroups;
+}
+
+
+// Name of default role for all new users.
+exports.ROLE_ANONYMOUS = "anonymous";
+// Name of the role above every other role: the admin.
+exports.ROLE_ADMIN = "admin";
+
+
+// Perform any initialization when the server starts up.
+exports.init = function() {
+
+    var deferred = Q.defer();
+
+    // Look for a the anonymous role in the database.
+    exports.getAllRoles().then(
+        function(roles) {
+            var found = _.find(roles, {name: exports.ROLE_ANONYMOUS});
+
+            // If no anonymous role is found in the database, create it.
+            if (!found) {
+                exports.createRole(exports.ROLE_ANONYMOUS).then(
+                    function(success) {
+
+                        var found = _.find(roles, {name: exports.ROLE_ADMIN});
+            
+                        // If no admin role is found in the database, create it.
+                        if (!found) {
+                            exports.createRole(exports.ROLE_ADMIN).then(
+                                function(success) {
+                                    deferred.resolve(success);
+                                },
+                                function(error) {
+                                    deferred.reject(error);
+                                }
+                            );
+                        }
+                        else {
+                            deferred.resolve(success);
+                        }
+
+                    },
+                    function(error) {
+                        deferred.reject(error);
+                    }
+                );
+            }
+            else {
+                deferred.resolve({});
+            }
+        }
+    );
+
+    return deferred.promise;
 }
 
 
@@ -698,7 +752,8 @@ exports.getUserPerms = function(user, permGroup) {
 //
 var mergeRolePerms = function (roleArray, permGroup) {
 
-    var mergedPerms = [];
+    //var mergedPerms = [];
+    var mergedPerms = {};
 
     for (var i = 0; i < roleArray.length; i++) {
 
@@ -707,7 +762,7 @@ var mergeRolePerms = function (roleArray, permGroup) {
         if (pgs.hasOwnProperty(permGroup)) {
             for (var perm in pgs[permGroup]) {
                 if (pgs[permGroup][perm] === true) {
-                    mergedPerms.push(perm);
+                    mergedPerms[perm] = true;
                     //mergedPerms[perm] = pgs[permGroup][perm];
                     //mergedPerms[perm] = mergedPerms[perm] ? mergedPerms[perm] : pgs[permGroup][perm];
                 }
@@ -715,6 +770,8 @@ var mergeRolePerms = function (roleArray, permGroup) {
         }
     }
 
-    return _.uniq(mergedPerms);
+    //return _.uniq(mergedPerms);
+    return mergedPerms;
 }
+
 

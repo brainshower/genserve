@@ -75,7 +75,7 @@ dbopen.openDB(globals.dbname).then(
   function (dbObj) {
       logger.log.info("Successfully opened the database.");
 
-      roleapi.getAllRoles().then(
+      roleapi.init().then(
           function() {
               logger.log.info("Synchronized all roles and permissions from the database.");
 
