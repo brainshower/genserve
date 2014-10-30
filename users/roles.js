@@ -59,16 +59,22 @@ exports.createRole = function (req, res) {
 exports.deleteRole = function (req, res) {
 
     var roleName = req.body.role;
+    var promise = roleapi.deleteRole(roleName);
 
-    roleapi.deleteRole(roleName).then(
-
-        function (success) {
-            res.send(success);
-        },
-        function (fail) {
-            res.send(500, fail);
-        }
-    );
+    if (promise) {
+        promise.then(
+            function (success) {
+                res.send(success);
+            },
+            function (fail) {
+                res.send(500, fail);
+            }
+        );
+    }
+    else {
+        // The role was a system role, and cannot be deleted.  Just fail.
+        res.send(500, {});
+    }
 }
 
 

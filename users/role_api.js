@@ -43,8 +43,10 @@ var createDefaultPermGroups = function() {
 }
 
 
-// Name of default role for all new users.
+// Name of default role for all non-logged-in users.
 exports.ROLE_ANONYMOUS = "anonymous";
+// Name of default role for all new users.
+exports.ROLE_AUTHENTICATED = "authenticated";
 // Name of the role above every other role: the admin.
 exports.ROLE_ADMIN = "admin";
 
@@ -57,41 +59,54 @@ exports.init = function() {
     // Look for a the anonymous role in the database.
     exports.getAllRoles().then(
         function(roles) {
-            var found = _.find(roles, {name: exports.ROLE_ANONYMOUS});
-
-            // If no anonymous role is found in the database, create it.
-            if (!found) {
-                exports.createRole(exports.ROLE_ANONYMOUS).then(
-                    function(success) {
-
-                        var found = _.find(roles, {name: exports.ROLE_ADMIN});
-            
-                        // If no admin role is found in the database, create it.
-                        if (!found) {
-                            exports.createRole(exports.ROLE_ADMIN).then(
-                                function(success) {
-                                    deferred.resolve(success);
-                                },
-                                function(error) {
-                                    deferred.reject(error);
+            predicate(roles, exports.ROLE_ANONYMOUS, function(err) {
+                if (!err) {
+                    predicate(roles, exports.ROLE_ADMIN, function(err) {
+                        if (!err) {
+                            predicate(roles, exports.ROLE_AUTHENTICATED, function(err) {
+                                if (!err) {
+                                    deferred.resolve({});
                                 }
-                            );
-                        }
+                                else {
+                                    deferred.reject({});
+                                }
+                            });
+                        } 
                         else {
-                            deferred.resolve(success);
+                            deferred.reject({});
                         }
-
-                    },
-                    function(error) {
-                        deferred.reject(error);
-                    }
-                );
-            }
-            else {
-                deferred.resolve({});
-            }
+                    });
+                }
+                else {
+                    deferred.reject({});
+                }
+            });
+        }, 
+        function (fail) {
+            // Could not fetch roles.  Error, exit.
+            deferred.reject({});
         }
     );
+
+    var predicate = function(roles, role, callback) {
+        var found = _.find(roles, {name: role});
+
+        // If no anonymous role is found in the database, create it as a system role.
+        if (!found) {
+            exports.createRole(role, true).then(
+                function(success) {
+                    if (callback) { callback(false); }
+                },
+                function(error) {
+                    if (callback) { callback(true); }
+                }
+            );
+        }
+        else { 
+             // It exists, so we're done with this role.
+            callback (false);
+        }
+    }
 
     return deferred.promise;
 }
@@ -105,18 +120,20 @@ exports.registerPermissions = function(permGroup, perms) {
 }
 
 
-// Create a new role
+// Create a new role.  If system = true, the role cannot be deleted (system role).
 //
-exports.createRole = function (roleName) {
+exports.createRole = function (roleName, system) {
 
     var newRoleObject;
     var db = dbopen.getDB();
     var deferred = Q.defer();
 
     logger.log.info('createRole: Creating new role object: ', roleName);
+    var systemRole = system ? true : false;
     var newRoleObject = {
         name : roleName,
         permGroups : createDefaultPermGroups(),
+        system : systemRole,
     };
 
     db.db.collection(col_roles, function(err, collection) {
@@ -153,28 +170,36 @@ exports.deleteRole = function (roleName) {
 
     logger.log.info('deleteRole: Deleting role object: ', roleName);
 
-    db.db.collection(col_roles, function(err, collection) {
-        collection.remove({name: roleName}, {safe:true}, function(err, result) {
-            var ret = {};
-            if (err) {
-                logger.log.error('deleteRole: Could not delete role: ', err);
-                ret = status.statusCode(1, 'role', 'Error deleting role');
-                deferred.reject(ret);
-            }
-            else {
-                logger.log.debug('deleteRole: Successfully deleted role object.');
-                ret = status.success('role')
-                // Update the local role cache
-                exports.getAllRoles().then(
-                    function() {
-                        deferred.resolve(ret);
-                    }
-                );
-            }
+    // First check if the role is a system role.
+    var role = _.find(role_database, {name: roleName});
+    if (role.system) {
+        return null;
+    }
+    else {
+        // Remove the role
+        db.db.collection(col_roles, function(err, collection) {
+            collection.remove({name: roleName}, {safe:true}, function(err, result) {
+                var ret = {};
+                if (err) {
+                    logger.log.error('deleteRole: Could not delete role: ', err);
+                    ret = status.statusCode(1, 'role', 'Error deleting role');
+                    deferred.reject(ret);
+                }
+                else {
+                    logger.log.debug('deleteRole: Successfully deleted role object.');
+                    ret = status.success('role')
+                    // Update the local role cache
+                    exports.getAllRoles().then(
+                        function() {
+                            deferred.resolve(ret);
+                        }
+                    );
+                }
+            });
         });
-    });
-
-    return deferred.promise;
+    
+        return deferred.promise;
+    }
 }
 
 
@@ -321,6 +346,7 @@ exports.setPermissions = function (role, permGroup, perms) {
                     var newRoleObject = {
                         name : role,
                         permGroups : createDefaultPermGroups(),
+                        system : false,
                     };
                     newRoleObject.permGroups[permGroup] = perms;
                     logger.log.debug('New role object: ',  newRoleObject);
