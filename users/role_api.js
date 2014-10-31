@@ -741,20 +741,20 @@ exports.getUserPerms = function(user, permGroup) {
         collection.findOne(search, function(err, urecord) {
 
             var ret = {};
+            var roles = [];
             if (err) {
                 logger.log.error('getUserPerms: Error accessing user collection: ', err);
                 ret = status.statusCode(1, 'role', 'Error accessing user collection.');
                 deferred.reject(ret);
             }
-            else if (urecord === undefined || urecord === null || urecord === {}) {
-                logger.log.error('getUserPerms: User not found: ', urecord);
-                ret = status.statusCode(2, 'role', 'User not found.');
-                deferred.reject(ret);
-            }
             else {
 
+                // If the user record cannot be found, the "user" is in the anonymous role by default.
+                if (urecord === undefined || urecord === null || urecord === {}) {
+                    roles.push(exports.ROLE_ANONYMOUS);
+                }
+
                 // Load all the role objects for the role(s) this user is assigned.
-                var roles = [];
                 if (urecord.hasOwnProperty('roles')) {
                     roles = urecord.roles;
                 }

@@ -144,7 +144,11 @@ exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
                     ret = status.statusCode(3, 'perm', 'No permission to create.')
                     deferred.reject(ret);
                 }
-            } // function
+            },
+            function (status) {
+                // This is called when an error occurs, like the database error.
+                deferred.reject(status);
+            } 
         ); // roleapi
     };
 
