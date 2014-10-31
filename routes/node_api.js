@@ -75,37 +75,13 @@ exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
 
     var db = dbopen.getDB();
     var deferred = Q.defer();
-
+    
     var node = {
       title : title,
       body : (body !== null && body !== undefined) ? body : null,
       creationDate : moment.utc(new Date(Date.now())).toString(),
       type : node_type,
     };
-
-    // If a uid was passed in, find the associated username an put into the node object.
-    if (uid) {
-        node.uid = uid;
-        db.db.collection(globals.col_users, function(err, collection) {
-            collection.findOne({'_id': new db.BSON.ObjectID(uid)}, function(err, item) {
-                var ret = {};
-                if (err) {
-                    ret = status.statusCode(1, 'nodeapi', 'Error finding user uid: ' + uid);
-                    deferred.reject(ret);
-                }
-                else { 
-                    if (item.hasOwnProperty('username')) {
-                        node.username = item.username;
-                    }
-                    predicate();
-                }
-    
-            });
-        });
-    }
-    else {
-        context.predicate();
-    }
 
     var predicate = function() {
 
@@ -151,6 +127,32 @@ exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
             } 
         ); // roleapi
     };
+    
+    // If a uid was passed in, find the associated username an put into the node object.
+    if (uid) {
+        node.uid = uid;
+        db.db.collection(globals.col_users, function(err, collection) {
+            collection.findOne({'_id': new db.BSON.ObjectID(uid)}, function(err, item) {
+                var ret = {};
+                if (err) {
+                    ret = status.statusCode(1, 'nodeapi', 'Error finding user uid: ' + uid);
+                    deferred.reject(ret);
+                }
+                else { 
+                    if (item.hasOwnProperty('username')) {
+                        node.username = item.username;
+                    }
+                    predicate();
+                }
+    
+            });
+        });
+    }
+    else {
+        predicate();
+    }
+
+
 
     return deferred.promise;
 }

@@ -723,51 +723,67 @@ exports.getUserPerms = function(user, permGroup) {
 
     logger.log.info("getUserPerms: Getting permGroups for permission group: ", permGroup);
 
-    var search = {};
-    if (user.hasOwnProperty('uid')) {
-        search._id = db.BSON.ObjectID(user.uid);
-        logger.log.debug("getUserPerms: Searching for user record by UID.");
-    }
-    else if (user.hasOwnProperty('username')) {
-        search.username = user.username;
-        logger.log.debug("getUserPerms: Searching for user record by username.");
-    }
-    else {
-        logger.log.error("getUserPerms: User parameter didn't contain correct field: ", user);
-    }
+    // If there's user credentials, need to assemble the critera for a user record search.
+    if (user) {
 
-    // Get the user record.
-    db.db.collection(globals.col_users, function(err, collection) {
-        collection.findOne(search, function(err, urecord) {
+        var search = {};
+        if (user.hasOwnProperty('uid')) {
+            search._id = db.BSON.ObjectID(user.uid);
+            logger.log.debug("getUserPerms: Searching for user record by UID.");
+        }
+        else if (user.hasOwnProperty('username')) {
+            search.username = user.username;
+            logger.log.debug("getUserPerms: Searching for user record by username.");
+        }
+        else {
+            logger.log.debug("getUserPerms: User parameter didn't contain a user field.  Probably an anonymous request: user = ", user);
+        }
 
-            var ret = {};
-            var roles = [];
-            if (err) {
-                logger.log.error('getUserPerms: Error accessing user collection: ', err);
-                ret = status.statusCode(1, 'role', 'Error accessing user collection.');
-                deferred.reject(ret);
-            }
-            else {
+        // Get the user record.
+        db.db.collection(globals.col_users, function(err, collection) {
+            collection.findOne(search, function(err, urecord) {
 
-                // If the user record cannot be found, the "user" is in the anonymous role by default.
-                if (urecord === undefined || urecord === null || urecord === {}) {
-                    roles.push(exports.ROLE_ANONYMOUS);
+                var ret = {};
+                var roles = [];
+                if (err) {
+                    logger.log.error('getUserPerms: Error accessing user collection: ', err);
+                    ret = status.statusCode(1, 'role', 'Error accessing user collection.');
+                    deferred.reject(ret);
                 }
+                else {
 
-                // Load all the role objects for the role(s) this user is assigned.
-                if (urecord.hasOwnProperty('roles')) {
-                    roles = urecord.roles;
-                }
+                    // If the user record cannot be found, the "user" is in the anonymous role by default.
+                    if (urecord === undefined || urecord === null || urecord === {}) {
+                        roles.push(exports.ROLE_ANONYMOUS);
+                    } 
+                    else if (urecord.hasOwnProperty('roles')) {
+                        // Load all the role objects for the role(s) this user is assigned.
+                        roles = urecord.roles;
+                    }
 
-                db.db.collection(col_roles, function(err, collection) {
-                    collection.find({name: {$in:roles}}).toArray(function(err, items) {
-                        var perms = mergeRolePerms(items, permGroup);
-                        deferred.resolve(perms);
-                    });
-                });  
-            } // else
+                    db.db.collection(col_roles, function(err, collection) {
+                        collection.find({name: {$in:roles}}).toArray(function(err, items) {
+                            var perms = mergeRolePerms(items, permGroup);
+                            deferred.resolve(perms);
+                        });
+                    });  
+                } // else
+            });
         });
-    });
+
+    }
+
+    // Anonymous user.  Just find the perms.
+    else {
+        var roles = [];
+        roles.push(exports.ROLE_ANONYMOUS);
+        db.db.collection(col_roles, function(err, collection) {
+            collection.find({name: {$in:roles}}).toArray(function(err, items) {
+                var perms = mergeRolePerms(items, permGroup);
+                deferred.resolve(perms);
+            });
+        });  
+    }
 
     return deferred.promise;
 }

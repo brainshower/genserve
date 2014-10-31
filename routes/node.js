@@ -38,9 +38,19 @@ exports.createNode = function (req, res) {
         );
     } // if session
     else {
-        // No session variable passed in.
-        var s = status.statusCode(999, "node", "No session object passed in.");
-        res.send(500, s);
+        // No session variable passed in.  Assume it's anonymous.
+        logger.log.info("createNode: Creating node (title, body): ", title, body);
+        nodeapi.createNode(title, body, null).then(
+            function(result) {
+                logger.log.info("createNode: Node created: ", result);
+                res.send(result.node);
+            },
+            // Error creating node
+            function(error) {
+                res.send(500, error);
+            }
+        );
+
     }
 }
 
@@ -99,9 +109,39 @@ exports.updateNode = function (req, res) {
         );
     } // if session
     else {
-        // No session variable passed in.
-        var s = status.statusCode(999, "node", "No session object passed in.");
-        res.send(500, s);
+        // No session variable passed in.  Assume it's anonymous.
+        // If incoming title + body for update.
+        if (req.body.data.hasOwnProperty("body")) {
+            var body = (req.body.data.body !== undefined && req.body.data.body !== null) ? req.body.data.body : null;
+            var node = {title: title,
+                        body: body};
+            logger.log.info("updateNode: Updating node (id, title, body): ", nid, title, body)
+            nodeapi.updateNode(nid, node, null, null).then(
+                function(result) {
+                    logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
+                    res.send(result);
+                },
+                function(error) {
+                    logger.log.debug("updateNode: Error updating node. Result = ", JSON.stringify(error));
+                    res.send(500, error);
+                }
+            );
+        }
+        // Else just a title to update.
+        else {
+            var node = {title: title};
+            logger.log.info("updateNode: Updating node (id, title): ", nid, title);
+            nodeapi.updateNode(nid, node, null, null).then(
+                function(result) {
+                    logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
+                    res.send(result);
+                },
+                function(error) {
+                    logger.log.debug("updateNode: Error updating node. Result = ", JSON.stringify(error));
+                    res.send(500, error);
+                }
+            );
+        }    
     }
 }
 
@@ -170,8 +210,21 @@ exports.findAllNodes = function (req, res) {
     } // if session
     else {
         // No session variable passed in.
-        var s = status.statusCode(999, "node", "No session object passed in.");
-        res.send(500, s);
+        // var s = status.statusCode(999, "node", "No session object passed in.");
+        // res.send(500, s);
+        //
+        // If no session, then this is an anonymous request.  Let Node API 
+        // determine if it has permission to execute.
+        logger.log.info("findAllNodes:");
+        nodeapi.findNodesByType("basic", null).then(
+            function (result) {
+                logger.log.debug("findAllNodes: ", result);
+                res.send(result.nodes);
+            },
+            function (error) {
+                res.send(500, error);
+            }
+        );
     }
 }
 
@@ -205,8 +258,15 @@ exports.deleteNode = function (req, res) {
         );
     } // if session
     else {
-        // No session variable passed in.
-        var s = status.statusCode(999, "node", "No session object passed in.");
-        res.send(500, s);
+        // No session variable passed in.  Assume it's anonymous.
+        logger.log.info("deleteNode: nid ", nid);
+        nodeapi.deleteNode(nid, null, null).then(
+            function (result) {
+                res.send({});
+            },
+            function (error) {
+                res.send(500, error);
+            }
+        );
     }
 }
