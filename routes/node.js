@@ -73,7 +73,7 @@ exports.updateNode = function (req, res) {
                     var node = {title: title,
                                 body: body};
                     logger.log.info("updateNode: Updating node (id, title, body): ", nid, title, body)
-                    nodeapi.updateNode(nid, node, null, session.uid).then(
+                    nodeapi.updateNode(nid, node, session.uid, null, null).then(
                         function(result) {
                             logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
                             res.send(result);
@@ -88,7 +88,7 @@ exports.updateNode = function (req, res) {
                 else {
                     var node = {title: title};
                     logger.log.info("updateNode: Updating node (id, title): ", nid, title);
-                    nodeapi.updateNode(nid, node, null, session.uid).then(
+                    nodeapi.updateNode(nid, node, session.uid, null, null).then(
                         function(result) {
                             logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
                             res.send(result);
@@ -116,7 +116,7 @@ exports.updateNode = function (req, res) {
             var node = {title: title,
                         body: body};
             logger.log.info("updateNode: Updating node (id, title, body): ", nid, title, body)
-            nodeapi.updateNode(nid, node, null, null).then(
+            nodeapi.updateNode(nid, node, null, null, null).then(
                 function(result) {
                     logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
                     res.send(result);
@@ -131,7 +131,7 @@ exports.updateNode = function (req, res) {
         else {
             var node = {title: title};
             logger.log.info("updateNode: Updating node (id, title): ", nid, title);
-            nodeapi.updateNode(nid, node, null, null).then(
+            nodeapi.updateNode(nid, node, null, null, null).then(
                 function(result) {
                     logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
                     res.send(result);
@@ -241,7 +241,7 @@ exports.deleteNode = function (req, res) {
             function (authResult) {
 
                 logger.log.info("deleteNode: nid ", nid);
-                nodeapi.deleteNode(nid, null, session.uid).then(
+                nodeapi.deleteNode(nid, session.uid).then(
                     function (result) {
                         res.send({});
                     },

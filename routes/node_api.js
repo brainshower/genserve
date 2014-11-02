@@ -15,7 +15,6 @@ var Q = require('q');
 
 
 // Initialize the permissions for basic nodes.
-var node_type = "basic";
 var node_perms = ['create', 
                   'read_any', 
                   'read_own', 
@@ -24,8 +23,6 @@ var node_perms = ['create',
                   'edit_any', 
                   'edit_own'];
 
-// Register permissions with the role api.
-roleapi.registerPermissions(node_type, node_perms);
 
 
 // Permission resolver.  With a list of permissions available, resolves them to the permissions available for a given node.
@@ -69,65 +66,26 @@ var defaultPermissionResolver = function (perms, owner) {
 };
 
 
+// Basic node type.
+exports.NODE_BASIC = "basic";
+
+
+
 // Create a new node.  Pass in title, body, and optional extender function for adding more fields, and optional permission resolver function.
 //
 exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
 
     var db = dbopen.getDB();
     var deferred = Q.defer();
-    
+    var predicate;
+
     var node = {
       title : title,
       body : (body !== null && body !== undefined) ? body : null,
       creationDate : moment.utc(new Date(Date.now())).toString(),
-      type : node_type,
+      type : exports.NODE_BASIC,
     };
 
-    var predicate = function() {
-
-        // Call an extension function to further manipulate the node object before insertion.
-        // Extender must at least set the type of node object.
-        if (nodeExtender) {
-            node = nodeExtender(node);
-        }
-    
-        // Check if we have create permissions. This is done after the extender function call to ensure
-        // we know the correct node type (which may have been changed by the extender function).
-        roleapi.getUserPerms({uid : uid}, node.type).then(
-            function (perms) {
-                var ret = {};
-                if (_.has(perms, 'create')) {
-
-                    // Insert into the database.
-                    db.db.collection(globals.col_nodes, function(err, collection) {
-                        collection.insert(node, {safe:true}, function(err, result) {
-                            if (err) {
-                                ret = status.statusCode(2, 'nodeapi', 'Error has occurred on insertion')
-                                deferred.reject(ret);
-                            } 
-                            else {
-                                // Success!  Not send the permissions back with the object.
-                                ret = status.success('nodeapi')
-                                ret.node = result[0];
-                                ret.node.perms = defaultPermissionResolver(perms, true); // attach the permissions to the node object.
-                                deferred.resolve(ret);
-                            }
-                        });
-                    }); // insert
-                } // create
-                else {
-                    // Do not have permissions to create the object.
-                    ret = status.statusCode(3, 'perm', 'No permission to create.')
-                    deferred.reject(ret);
-                }
-            },
-            function (status) {
-                // This is called when an error occurs, like the database error.
-                deferred.reject(status);
-            } 
-        ); // roleapi
-    };
-    
     // If a uid was passed in, find the associated username an put into the node object.
     if (uid) {
         node.uid = uid;
@@ -152,34 +110,72 @@ exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
         predicate();
     }
 
+    predicate = function() {
 
+        // Call an extension function to further manipulate the node object before insertion.
+        // Extender function should change the node type (if adding fields), and could change the owner UID.
+        if (nodeExtender) {
+            node = nodeExtender(node);
+        }
+    
+        // Check if we have create permissions. This is done after the extender function call to ensure
+        // we know the correct node type (which may have been changed by the extender function).
+        roleapi.getUserPerms({uid : uid}, node.type).then(
+            function (perms) {
+                var ret = {};
+                if (_.has(perms, 'create')) {
 
+                    // Insert into the database.
+                    db.db.collection(globals.col_nodes, function(err, collection) {
+                        collection.insert(node, {safe:true}, function(err, result) {
+                            if (err) {
+                                ret = status.statusCode(2, 'nodeapi', 'Error has occurred on insertion')
+                                deferred.reject(ret);
+                            } 
+                            else {
+                                // Success!  Not send the permissions back with the object.
+                                ret = status.success('nodeapi')
+                                ret.node = result[0];
+                                if (permResolver) {
+                                    ret.node.perms = permResolver(perms, uid === node.uid);
+                                }
+                                else {
+                                    ret.node.perms = defaultPermissionResolver(perms, true); // attach the permissions to the node object.
+                                }
+                                deferred.resolve(ret);
+                            }
+                        });
+                    }); // insert
+                } // create
+                else {
+                    // Do not have permissions to create the object.
+                    ret = status.statusCode(3, 'perm', 'No permission to create.')
+                    deferred.reject(ret);
+                }
+            },
+            function (status) {
+                // This is called when an error occurs, like the database error.
+                deferred.reject(status);
+            } 
+        ); // roleapi
+    };
+    
     return deferred.promise;
 }
 
 
-// Update an existing node.  Pass in a node object (only fields to be updated need be set), and
-// extender function for updating other fields.
+// Update an existing node.  Pass in a node object (only fields to be updated should be set), and
+// nodeExtender function for updating other fields.
 //
-exports.updateNode = function (nid, object, extender, uid) {
+exports.updateNode = function (nid, object, uid, nodeExtender, permResolver) {
 
     var node = {};
     var origOwner = false;
     var origType;
     var db = dbopen.getDB();
     var deferred = Q.defer();
+    var predicate, predicate2, predicate3;
 
-    if (object.hasOwnProperty('title')) {
-        node.title = object.title;
-    }
-    if (object.hasOwnProperty('body')) {
-        node.body = object.body;
-    }
-
-    // Extender to set fields for updating.
-    if (extender !== null && extender !== undefined) {
-        node = extender(node);
-    }
 
     // Get the node so we can check its type.
     db.db.collection(globals.col_nodes, function(err, collection) {
@@ -190,15 +186,26 @@ exports.updateNode = function (nid, object, extender, uid) {
             }
             else {
                 // Capture if the UID passed in owns this node, the node type, and continue.
-                origOwner = (item.uid === uid);
+                origOwner = (item.uid === uid);  // Capture if the owner is wanting to update his node.
                 origType = item.type;  // Capture the node type.
+                node = item;
                 predicate();
             }
         });
     });
 
     // Check user permissions for this node update.
-    var predicate = function() {
+    predicate = function() {
+
+        // Update the node object with new data if passed in via the object parameter.
+        if (object.hasOwnProperty('title')) {
+            node.title = object.title;
+        }
+        if (object.hasOwnProperty('body')) {
+            node.body = object.body;
+        }
+        
+        // Check permissions based on the original type of the node (versus a possible type change by the extender fn)
         roleapi.getUserPerms({uid : uid}, origType).then(
             function (perms) {
                 var ret = {};
@@ -214,55 +221,104 @@ exports.updateNode = function (nid, object, extender, uid) {
                 }
                 else {
                     logger.log.debug("nodeapi:  User does not have permission to edit this node.");
-                    ret = status.statusCode(3, 'perm', 'User does not have permission to update.');
+                    ret = status.statusCode(2, 'perm', 'User does not have permission to update.');
                     deferred.reject(ret);
                 }
     
-            } // getUserPerms function
-        );
-    } // predicate
+            }, // getUserPerms function
+            function (error) {
+                logger.log.debug("nodeapi:  First check of user perms for existing node failed.");
+                ret = status.statusCode(3, 'nodeapi', 'Could not get user permissions for existing node.');
+                deferred.reject(ret);
+            }
 
-    // Perform the node update
-    var predicate2 = function() {
+        );
+    }; // predicate
+
+    // Perform the node update.  We're just re-inserting the node (not updating fields).  Since we're single-threaded,
+    // this should be an effective atomic operation and safe.
+    predicate2 = function() {
+
+        // Call extender function to set fields for updating.  This is done at the very end just before updating.
+        // Extender function could possibly add fields, or change the node type or owner UID.
+        if (nodeExtender) {
+            node = nodeExtender(node);
+        }
+
         db.db.collection(globals.col_nodes, function(err, collection) {
-            collection.update({'_id' : new db.BSON.ObjectID(nid)}, {$set: node}, {safe:true}, function(err, result) {
+            collection.update({'_id' : new db.BSON.ObjectID(nid)}, node, {safe:true}, function(err, result) {
                 if (err) {
                     logger.log.debug("nodeapi:  Could not update the node.");
                     ret = status.statusCode(4, 'nodeapi', 'Error has occurred on update');
                     deferred.reject(ret);
                 }
                 else {
-                    logger.log.debug("nodeapi:  Successfully updated the node.");
-                    ret = status.success('nodeapi');
-                    //ret.node = result[0];
-                    deferred.resolve(ret);
+                    predicate3();
                 }
             });
         });
-    }; // predicate2 function
+    }; // predicate2
+
+    // Finally, get node and its permissions based on the possible new type & owner of the node (may changed by the extender fn)
+    predicate3 = function() {
+
+        db.db.collection(globals.col_nodes, function (err, collection) {
+            collection.findOne({'_id': new db.BSON.ObjectID(nid)}, function (err, item) {
+                if (err) {
+                    ret = status.statusCode(5, 'nodeapi', 'Error retrieving node after update.');
+                    deferred.reject(ret);
+                }  
+                else {
+                    roleapi.getUserPerms({uid : uid}, item.type).then(
+                        function (perms) {
+                            var ret = {};
+                            logger.log.debug("nodeapi:  Successfully updated the node.");
+                            ret = status.success('nodeapi');
+                            ret.node = item;
+                            if (permResolver) {
+                                ret.node.perms = permResolver(perms, uid === item.uid);
+                            }
+                            else {
+                                ret.node.perms = defaultPermissionResolver(perms, uid === item.uid);
+                            }
+                            deferred.resolve(ret);    
+                        },
+                        function (error) {
+                            logger.log.debug("nodeapi:  Final check of user perms for updated node failed.");
+                            ret = status.statusCode(6, 'nodeapi', 'Could not get user permissions for updated node.');
+                            deferred.reject(ret);
+                        }
+                    );
+                } // else
+            })
+        });
+
+    }
 
     return deferred.promise;
 }
 
 
-// Find a node by its ID.
+// Find a node by its ID. 
+// TODO This function really hasn't been used or tested.
 // 
-exports.findNodeById = function(nid, uid) {
+exports.findNodeById = function (nid, uid, permResolver) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
     var owner = false;
+    var predicate;
 
     // Get the node and ensure the permissions allow the user to access it.
-    db.db.collection(globals.col_nodes, function(err, collection) {
-        collection.findOne({'_id': new db.BSON.ObjectID(nid)}, function(err, item) {
+    db.db.collection(globals.col_nodes, function (err, collection) {
+        collection.findOne({'_id': new db.BSON.ObjectID(nid)}, function (err, item) {
             if (err) {
                 ret = status.statusCode(1, 'nodeapi', 'Error finding node.');
                 deferred.reject(ret);
             }  
             else {
                 roleapi.getUserPerms({uid : uid}, node.type).then(
-                    function(perms) {
+                    function (perms) {
                         owner = (uid === item.uid); // Set the flag if this user is the owner of the node.
                         if (_.has(perms, 'read_any')) {
                             logger.log.debug("nodeapi:  User has permission to read any node.");
@@ -275,13 +331,14 @@ exports.findNodeById = function(nid, uid) {
                         }
                         else {
                             logger.log.debug("nodeapi:  User does not have permission to read this node.");
-                            var ret = status.statusCode(1, 'perm', 'User does not have permission to read.');
+                            var ret = status.statusCode(2, 'perm', 'User does not have permission to read.');
                             deferred.reject(ret);
                         }
                     },
                     function (fail) {
-                        // No permissions found.  Just send back (probably should return anonymous role perms at some point.)
-                        predicate(item, undefined);
+                        logger.log.debug("nodeapi:  Could not get user perms for node.");
+                        ret = status.statusCode(3, 'nodeapi', 'Could not get user permissions for node.');
+                        deferred.reject(ret);
                     }
                 );
             }
@@ -289,11 +346,19 @@ exports.findNodeById = function(nid, uid) {
         });
     });
 
-    // Return the found node.
-    var predicate = function(item, perms) {
+    // Return the found node with the resolved permissions available to the client.
+    predicate = function (item, perms) {
         var ret = status.success('nodeapi')
         ret.node = item;
-        if (perms) {ret.node.perms = defaultPermissionResolver(perms, owner); } // attach the returned permissions to the node object.
+        // Return appropriate permissions that user can execute on this object.
+        if (perms) {
+            if (permResolver) {
+                ret.node.perms = permResolver(perms, owner);
+            }
+            else {
+                ret.node.perms = defaultPermissionResolver(perms, owner);
+            }
+        }
         deferred.resolve(ret);
     };
 
@@ -302,8 +367,9 @@ exports.findNodeById = function(nid, uid) {
 
 
 // Find all nodes by a content type.  If type not passed in, all node types are found.
+// The optional permission resolver function is used to override the default permissions for all nodes.
 // 
-exports.findNodesByType = function(type, uid) {
+exports.findNodesByType = function(type, uid, permResolver) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
@@ -317,33 +383,34 @@ exports.findNodesByType = function(type, uid) {
         collection.find(search).toArray(function(err, items) {
             var ret = {};
             if (err) {
-                ret = status.statusCode(1, 'nodeapi', 'Error finding nodes.');
+                ret = status.statusCode(1, 'nodeapi', 'Error retrieving nodes.');
                 deferred.reject(ret); 
             }
             else {
                 // Attach permission information to each node object.
-                ret = status.success('nodeapi')
-                ret.nodes = items;
+                ret = status.success('nodeapi');
+                ret.nodes = [];
                 var i = 0;
                 async.whilst(
                     // Test condition
-                    function() { return (i < ret.nodes.length) }, 
+                    function () { return (i < items.length) }, 
                     // Called each iteration
-                    function(callback) {
+                    function (callback) {
                         i++;
-                        roleapi.getUserPerms({uid : uid}, ret.nodes[i-1].type || node_type).then(
+                        roleapi.getUserPerms({uid : uid}, items[i-1].type || exports.NODE_BASIC).then(
                             function(perms) {
-                                var owner = (uid === ret.nodes[i-1].uid); // Set flag that the user is the owner of this node.
+                                var owner = (uid === items[i-1].uid); // Set flag that the user is the owner of this node.
                                 if (_.has(perms, 'read_any') || (_.has(perms, 'read_own') && owner)) {
                                     logger.log.debug("nodeapi:  User has permission to read the node.");
-                                    //ret.nodes[i-1].perms = [];
-                                    ret.nodes[i-1].perms = defaultPermissionResolver(perms, owner);
-                                    logger.log.debug(ret.nodes[i-1].perms);
-                                }
-                                else {
-                                    // Remove node from the list; user doesn't have permission to read it.
-                                    logger.log.debug("nodeapi:  User lacks permission to read the node.");
-                                    ret.nodes[i-1] = null;
+                                    if (permResolver) {
+                                        items[i-1].perms = permResolver(perms, owner);    
+                                    }
+                                    else {
+                                        items[i-1].perms = defaultPermissionResolver(perms, owner);
+                                    }
+
+                                    // Add this node to the list of approved nodes to return.
+                                    ret.nodes.push(items[i-1]);
                                 }
 
                                 callback(); 
@@ -355,7 +422,7 @@ exports.findNodesByType = function(type, uid) {
                         );
                     },
                     // Final function called when above functions are done.
-                    function() {
+                    function () {
                         deferred.resolve(ret);
                     }
                 );
@@ -369,7 +436,7 @@ exports.findNodesByType = function(type, uid) {
 
 // Delete a node by passing in the node ID.
 // 
-exports.deleteNode = function(nid, extender, uid) {
+exports.deleteNode = function(nid, uid, nodeExtender) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
@@ -380,7 +447,7 @@ exports.deleteNode = function(nid, extender, uid) {
     db.db.collection(globals.col_nodes, function(err, collection) {
         collection.findOne({'_id': new db.BSON.ObjectID(nid)}, function(err, item) {
             if (err) {
-                ret = status.statusCode(1, 'nodeapi', 'Could not load the node.');
+                ret = status.statusCode(1, 'nodeapi', 'Could not retrieve the node.');
                 deferred.reject(ret);
             }
             else {
@@ -392,7 +459,7 @@ exports.deleteNode = function(nid, extender, uid) {
         });
     });
 
-    // Check user permissions for this node deletion.
+    // Check permissions for this node deletion.
     var predicate = function() {
         roleapi.getUserPerms({uid : uid}, origType).then(
             function (perms) {
@@ -428,15 +495,20 @@ exports.deleteNode = function(nid, extender, uid) {
                 }
                 else {
                     // Now that the node has been deleted successfully, call the extender function so anything else related can be deleted.
-                    if (extender !== null && extender !== undefined) {
-                       node = extender(node);
-                   }
-    
-                   ret = status.success('nodeapi')
-                   deferred.resolve(ret); 
+                    if (nodeExtender) {
+                        node = nodeExtender(node);
+                    }
+                    ret = status.success('nodeapi')
+                    deferred.resolve(ret); 
                 }
             });
         });
     }
     return deferred.promise;
 }
+
+
+// -- Initialization ------------------------------------------------
+
+// Register permissions with the role api.
+roleapi.registerPermissions(exports.NODE_BASIC, node_perms);
