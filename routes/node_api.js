@@ -77,7 +77,6 @@ exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
 
     var db = dbopen.getDB();
     var deferred = Q.defer();
-    var predicate;
 
     var node = {
       title : title,
@@ -110,7 +109,7 @@ exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
         predicate();
     }
 
-    predicate = function() {
+    function predicate () {
 
         // Call an extension function to further manipulate the node object before insertion.
         // Extender function should change the node type (if adding fields), and could change the owner UID.
@@ -174,8 +173,6 @@ exports.updateNode = function (nid, object, uid, nodeExtender, permResolver) {
     var origType;
     var db = dbopen.getDB();
     var deferred = Q.defer();
-    var predicate, predicate2, predicate3;
-
 
     // Get the node so we can check its type.
     db.db.collection(globals.col_nodes, function(err, collection) {
@@ -195,7 +192,7 @@ exports.updateNode = function (nid, object, uid, nodeExtender, permResolver) {
     });
 
     // Check user permissions for this node update.
-    predicate = function() {
+    function predicate () {
 
         // Update the node object with new data if passed in via the object parameter.
         if (object.hasOwnProperty('title')) {
@@ -237,7 +234,7 @@ exports.updateNode = function (nid, object, uid, nodeExtender, permResolver) {
 
     // Perform the node update.  We're just re-inserting the node (not updating fields).  Since we're single-threaded,
     // this should be an effective atomic operation and safe.
-    predicate2 = function() {
+    function predicate2 () {
 
         // Call extender function to set fields for updating.  This is done at the very end just before updating.
         // Extender function could possibly add fields, or change the node type or owner UID.
@@ -260,7 +257,7 @@ exports.updateNode = function (nid, object, uid, nodeExtender, permResolver) {
     }; // predicate2
 
     // Finally, get node and its permissions based on the possible new type & owner of the node (may changed by the extender fn)
-    predicate3 = function() {
+    function predicate3 () {
 
         db.db.collection(globals.col_nodes, function (err, collection) {
             collection.findOne({'_id': new db.BSON.ObjectID(nid)}, function (err, item) {
@@ -307,7 +304,6 @@ exports.findNodeById = function (nid, uid, permResolver) {
     var deferred = Q.defer();
     var db = dbopen.getDB();
     var owner = false;
-    var predicate;
 
     // Get the node and ensure the permissions allow the user to access it.
     db.db.collection(globals.col_nodes, function (err, collection) {
@@ -347,7 +343,7 @@ exports.findNodeById = function (nid, uid, permResolver) {
     });
 
     // Return the found node with the resolved permissions available to the client.
-    predicate = function (item, perms) {
+    function predicate (item, perms) {
         var ret = status.success('nodeapi')
         ret.node = item;
         // Return appropriate permissions that user can execute on this object.
@@ -460,7 +456,7 @@ exports.deleteNode = function(nid, uid, nodeExtender) {
     });
 
     // Check permissions for this node deletion.
-    var predicate = function() {
+    function predicate () {
         roleapi.getUserPerms({uid : uid}, origType).then(
             function (perms) {
                 var ret = {};
@@ -485,7 +481,7 @@ exports.deleteNode = function(nid, uid, nodeExtender) {
     } // predicate
 
     // Delete the node
-    var predicate2 = function() {
+    function predicate2 () {
         db.db.collection(globals.col_nodes, function(err, collection) {
             collection.remove({'_id':new db.BSON.ObjectID(nid)}, {safe:true}, function(err, result) {
                 var ret = {};

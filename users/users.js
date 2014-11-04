@@ -76,9 +76,9 @@ exports.authUser = function(req, res) {
                 }
                 else {
 
-                    // Remove any existing session object for this user ID
-                    db.db.collection(globals.col_sessions, function(err, collection) {
-                        collection.remove({uid: item._id}, function(err, result) {
+                    // Remove any existing session object for this user ID.  Only if multi-user sessions aren't allowed.
+                    //db.db.collection(globals.col_sessions, function(err, collection) {
+                        //collection.remove({uid: item._id}, function(err, result) {
 
                             // Create the new session object.
                             var session = {
@@ -98,8 +98,8 @@ exports.authUser = function(req, res) {
                                     }
                                 });
                             });
-                        });
-                    });
+                        //});
+                    //});
                 } // else password check
             } // else can't find username
         });

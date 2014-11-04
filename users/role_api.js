@@ -59,11 +59,11 @@ exports.init = function() {
     // Look for a the anonymous role in the database.
     exports.getAllRoles().then(
         function(roles) {
-            predicate(roles, exports.ROLE_ANONYMOUS, function(err) {
+            predicate(roles, exports.ROLE_ANONYMOUS, function (err) {
                 if (!err) {
-                    predicate(roles, exports.ROLE_ADMIN, function(err) {
+                    predicate(roles, exports.ROLE_ADMIN, function (err) {
                         if (!err) {
-                            predicate(roles, exports.ROLE_AUTHENTICATED, function(err) {
+                            predicate (roles, exports.ROLE_AUTHENTICATED, function (err) {
                                 if (!err) {
                                     deferred.resolve({});
                                 }
@@ -88,7 +88,7 @@ exports.init = function() {
         }
     );
 
-    var predicate = function(roles, role, callback) {
+    function predicate (roles, role, callback) {
         var found = _.find(roles, {name: role});
 
         // If no anonymous role is found in the database, create it as a system role.
@@ -480,7 +480,7 @@ exports.getUserRoles = function (user) {
         deferred.reject(ret);
     }
 
-    // Add the role to the user record.
+    // Find the user record.
     db.db.collection(globals.col_users, function(err, collection) {
         collection.findOne(search, function(err, item) {
 
