@@ -5,9 +5,11 @@ var express = require('express'),
     globals = require('./global/globals'),
     logger = require('./global/logger'),
     node = require('./routes/node'),
+    nodeapi = require('./routes/node_api'),
     users = require('./users/users'),
     roles = require('./users/roles'),
-    roleapi = require('./users/role_api');
+    roleapi = require('./users/role_api'),
+    util = require('./global/utility');
  
 var app = express();
 
@@ -41,12 +43,12 @@ app.use(function (req, res, next) {
 
 // Setup all the API routes ---------------------------------------------------------------
 
-// Node API 
-app.post('/node/all', node.findAllNodes);
-app.post('/node/id/:id', node.findNodeById);
-app.post('/node', node.createNode);
-app.post('/node/update/:id', node.updateNode);
-app.post('/node/delete/:id', node.deleteNode);
+// Node API: Use the base API functions for executing the node commands.
+app.post('/node',             util.curry(node.createNode, nodeapi.createNode) );
+app.post('/node/update/:id',  util.curry(node.updateNode, nodeapi.updateNode) );
+app.post('/node/delete/:id',  util.curry(node.deleteNode, nodeapi.deleteNode) );
+app.post('/node/all',         util.curry(node.findAllNodes, nodeapi.findAllNodes) );
+app.post('/node/id/:id',      util.curry(node.findNodebyId, nodeapi.findNodeById) );
 
 // User and authentication API
 app.post('/login/create', users.createUser); // Create a user

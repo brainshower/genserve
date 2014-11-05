@@ -73,14 +73,15 @@ exports.NODE_BASIC = "basic";
 
 // Create a new node.  Pass in title, body, and optional extender function for adding more fields, and optional permission resolver function.
 //
+//exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
 exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
 
     var db = dbopen.getDB();
     var deferred = Q.defer();
 
     var node = {
-      title : title,
-      body : (body !== null && body !== undefined) ? body : null,
+      title : (title) ? title : null,
+      body : (body) ? body : null,
       creationDate : moment.utc(new Date(Date.now())).toString(),
       type : exports.NODE_BASIC,
     };

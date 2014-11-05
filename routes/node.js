@@ -7,19 +7,21 @@ var auth = require ('../users/auth');
 
 // Create a node using the request and response data from the HTTP request.
 //
-exports.createNode = function (req, res) {
+exports.createNode = function (apiCall, req, res) {
 
     var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
     var node = (req.body.data !== undefined && req.body.data !== null) ? req.body.data : null;
     var title = node.hasOwnProperty("title") ? node.title : null;
     var body = node.hasOwnProperty("body") ? node.body : null;
 
+    var api_createNode = apiCall ? apiCall : nodeapi.createNode;
+
     if (session && session.hasOwnProperty("uid") && session.hasOwnProperty("token")) {
         auth.auth(session.uid, session.token).then(
             function (authResult) {
 
                 logger.log.info("createNode: Creating node (title, body): ", title, body);
-                nodeapi.createNode(title, body, session.uid).then(
+                api_createNode(title, body, session.uid).then(
                     function(result) {
                         logger.log.info("createNode: Node created: ", result);
                         res.send(result.node);
@@ -40,7 +42,7 @@ exports.createNode = function (req, res) {
     else {
         // No session variable passed in.  Assume it's anonymous.
         logger.log.info("createNode: Creating node (title, body): ", title, body);
-        nodeapi.createNode(title, body, null).then(
+        api_createNode(title, body, null).then(
             function(result) {
                 logger.log.info("createNode: Node created: ", result);
                 res.send(result.node);
@@ -57,11 +59,13 @@ exports.createNode = function (req, res) {
 
 // Update a node using the request and response data from the HTTP request.
 //
-exports.updateNode = function (req, res) {
+exports.updateNode = function (apiCall, req, res) {
 
     var nid = req.params.id;
     var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
     var title = (req.body.data.title !== undefined && req.body.data.title !== null) ? req.body.data.title : null;
+
+    var api_updateNode = apiCall ? apiCall : nodeapi.updateNode;
 
     if (session && session.hasOwnProperty("uid") && session.hasOwnProperty("token")) {
         auth.auth(session.uid, session.token).then(
@@ -73,7 +77,7 @@ exports.updateNode = function (req, res) {
                     var node = {title: title,
                                 body: body};
                     logger.log.info("updateNode: Updating node (id, title, body): ", nid, title, body)
-                    nodeapi.updateNode(nid, node, session.uid, null, null).then(
+                    api_updateNode(nid, node, session.uid, null, null).then(
                         function(result) {
                             logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
                             res.send(result);
@@ -88,7 +92,7 @@ exports.updateNode = function (req, res) {
                 else {
                     var node = {title: title};
                     logger.log.info("updateNode: Updating node (id, title): ", nid, title);
-                    nodeapi.updateNode(nid, node, session.uid, null, null).then(
+                    api_updateNode(nid, node, session.uid, null, null).then(
                         function(result) {
                             logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
                             res.send(result);
@@ -116,7 +120,7 @@ exports.updateNode = function (req, res) {
             var node = {title: title,
                         body: body};
             logger.log.info("updateNode: Updating node (id, title, body): ", nid, title, body)
-            nodeapi.updateNode(nid, node, null, null, null).then(
+            api_updateNode(nid, node, null, null, null).then(
                 function(result) {
                     logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
                     res.send(result);
@@ -131,7 +135,7 @@ exports.updateNode = function (req, res) {
         else {
             var node = {title: title};
             logger.log.info("updateNode: Updating node (id, title): ", nid, title);
-            nodeapi.updateNode(nid, node, null, null, null).then(
+            api_updateNode(nid, node, null, null, null).then(
                 function(result) {
                     logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
                     res.send(result);
@@ -148,17 +152,19 @@ exports.updateNode = function (req, res) {
 
 // Find node by the node ID using the request and response data from the HTTP request.
 //
-exports.findNodeById = function (req, res) {
+exports.findNodeById = function (apiCall, req, res) {
 
     var nid = req.params.id;
     var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
+
+    var api_findNodeById = apiCall ? apiCall : nodeapi.findNodeById;
 
     if (session && session.hasOwnProperty("uid") && session.hasOwnProperty("token")) {
         auth.auth(session.uid, session.token).then(
             function (authResult) {
 
                 logger.log.info("findNodeById: (id): ", nid);
-                nodeapi.findNodeById(nid, session.uid).then(
+                api_findNodeById(nid, session.uid).then(
                     function(result) {
                         res.send(result.node);
                     },
@@ -183,16 +189,18 @@ exports.findNodeById = function (req, res) {
 
 // Find node by the basic node type using the request and response data from the HTTP request.
 //
-exports.findAllNodes = function (req, res) {
+exports.findAllNodes = function (apiCall, req, res) {
 
     var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
+
+    var api_findNodesByType = apiCall ? apiCall : nodeapi.findNodesByType;
 
     if (session && session.hasOwnProperty("uid") && session.hasOwnProperty("token")) {
         auth.auth(session.uid, session.token).then(
             function (authResult) {
 
                 logger.log.info("findAllNodes:");
-                nodeapi.findNodesByType("basic", session.uid).then(
+                api_findNodesByType("basic", session.uid).then(
                     function (result) {
                         logger.log.debug("findAllNodes: ", result);
                         res.send(result.nodes);
@@ -216,7 +224,7 @@ exports.findAllNodes = function (req, res) {
         // If no session, then this is an anonymous request.  Let Node API 
         // determine if it has permission to execute.
         logger.log.info("findAllNodes:");
-        nodeapi.findNodesByType("basic", null).then(
+        api_findNodesByType("basic", null).then(
             function (result) {
                 logger.log.debug("findAllNodes: ", result);
                 res.send(result.nodes);
@@ -231,17 +239,19 @@ exports.findAllNodes = function (req, res) {
 
 // Find node by the basic node type using the request and response data from the HTTP request.
 //
-exports.deleteNode = function (req, res) {
+exports.deleteNode = function (apiCall, req, res) {
 
     var nid = req.params.id;
     var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
+
+    var api_deleteNode = apiCall ? apiCall : nodeapi.deleteNode;
 
     if (session && session.hasOwnProperty("uid") && session.hasOwnProperty("token")) {
         auth.auth(session.uid, session.token).then(
             function (authResult) {
 
                 logger.log.info("deleteNode: nid ", nid);
-                nodeapi.deleteNode(nid, session.uid).then(
+                api_deleteNode(nid, session.uid).then(
                     function (result) {
                         res.send({});
                     },
@@ -260,7 +270,7 @@ exports.deleteNode = function (req, res) {
     else {
         // No session variable passed in.  Assume it's anonymous.
         logger.log.info("deleteNode: nid ", nid);
-        nodeapi.deleteNode(nid, null, null).then(
+        api_deleteNode(nid, null, null).then(
             function (result) {
                 res.send({});
             },
