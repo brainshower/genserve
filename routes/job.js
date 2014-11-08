@@ -1,6 +1,6 @@
 /*
 
-Job Node 
+Job Content Type
 
 */
 
@@ -10,6 +10,7 @@ var logger = require('../global/logger');
 var _ = require('lodash');
 var Q = require('q');
 var node = require('./node');
+var nodeapi = require('./node_api');
 var roleapi = require('../users/role_api');
 
 
@@ -27,13 +28,20 @@ exports.NODE_TYPE_JOB = "job";
 
 
 
-exports.createJob = function (title, body, uid) {
+exports.createJob = function (node, reqData, uid) {
 
-	node.createNode (title, body, uid, 
+	logger.log.info("createJob: Arrived! node = \n", node);
+	nodeapi.createNode (node, reqData, uid, 
 
 		// Node Extender for setting content type and handling job-related fields
-		function(node) {
+		function(node, reqData) {
 			node.type = exports.NODE_TYPE_JOB;
+
+			if (reqData.hasOwnProperty("company") && reqData.company) {
+				node.company = reqData.company;
+			}
+
+			return node;
 		}
 	);
 }

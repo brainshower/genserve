@@ -10,6 +10,8 @@ var express = require('express'),
     roles = require('./users/roles'),
     roleapi = require('./users/role_api'),
     util = require('./global/utility');
+
+var job = require('./routes/job');
  
 var app = express();
 
@@ -50,6 +52,9 @@ app.post('/node/delete/:id',  util.curry(node.deleteNode, nodeapi.deleteNode) );
 app.post('/node/all',         util.curry(node.findAllNodes, nodeapi.findAllNodes) );
 app.post('/node/id/:id',      util.curry(node.findNodebyId, nodeapi.findNodeById) );
 
+// Job - testing
+app.post('/job',             util.curry(node.createNode, job.createJob) );
+
 // User and authentication API
 app.post('/login/create', users.createUser); // Create a user
 app.post('/login/auth', users.authUser); // Authenticate user
@@ -74,19 +79,18 @@ app.post('/admin/role/perm/set', roles.setPerm); // Set a permission
 //
 logger.log.info("Opening the database.");
 dbopen.openDB(globals.dbname).then(
-  function (dbObj) {
-      logger.log.info("Successfully opened the database.");
+    function (dbObj) {
+        logger.log.info("Successfully opened the database.");
 
-      roleapi.init().then(
-          function() {
-              logger.log.info("Synchronized all roles and permissions from the database.");
+        roleapi.init().then(
+            function() {
+                logger.log.info("Synchronized all roles and permissions from the database.");
 
-              logger.log.info('Listening on port 3000...');
-              app.listen(3000);
-              dbObj.close();
-          }
-      );
-
-  }
+                logger.log.info('Listening on port 3000...');
+                app.listen(3000);
+                dbObj.close();
+            }
+        );
+    }
 );
 

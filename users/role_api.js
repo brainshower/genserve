@@ -57,15 +57,16 @@ exports.init = function() {
     var deferred = Q.defer();
 
     // Look for a the anonymous role in the database.
+    logger.log.debug("checkPermissionGroups: Checking for system roles.");
     exports.getAllRoles().then(
         function(roles) {
-            predicate(roles, exports.ROLE_ANONYMOUS, function (err) {
+            checkCreateRole(roles, exports.ROLE_ANONYMOUS, function (err) {
                 if (!err) {
-                    predicate(roles, exports.ROLE_ADMIN, function (err) {
+                    checkCreateRole(roles, exports.ROLE_ADMIN, function (err) {
                         if (!err) {
-                            predicate (roles, exports.ROLE_AUTHENTICATED, function (err) {
+                            checkCreateRole (roles, exports.ROLE_AUTHENTICATED, function (err) {
                                 if (!err) {
-                                    deferred.resolve({});
+                                    checkPermissionGroups();
                                 }
                                 else {
                                     deferred.reject({});
@@ -88,7 +89,7 @@ exports.init = function() {
         }
     );
 
-    function predicate (roles, role, callback) {
+    function checkCreateRole (roles, role, callback) {
         var found = _.find(roles, {name: role});
 
         // If no anonymous role is found in the database, create it as a system role.
@@ -108,6 +109,44 @@ exports.init = function() {
         }
     }
 
+    function checkPermissionGroups() {
+        logger.log.debug("checkPermissionGroups: Ensuring all permission groups are in database.");
+        logger.log.debug("checkPermissionGroups: permissions registry = \n", permissions_registry);
+        var j = 0;
+        for (var permGroup in permissions_registry) {
+            if (permissions_registry.hasOwnProperty(permGroup)) {
+                logger.log.info("checkPermissionGroups: Looking for permission group ", permGroup);
+                exports.getAllRoles().then(
+                    function(roles) {
+                        for (var i = 0; i < roles.length; i++) {
+                            var role = roles[i];
+                            logger.log.debug("checkPermissionGroups: Role = ", role.name);
+                            if (role.hasOwnProperty("permGroups") && ! _.has(role.permGroups, permGroup)) {
+                                exports.createPermGroup(role.name, permGroup).then(
+                                    function (success) {
+                                        logger.log.info("checkPermissionGroups: Added permission group ", permGroup, " for role ", role);
+                                        if ((i === roles.length - 1) && (j === permissions_registry.length - 1)) {
+                                            deferred.resolve();
+                                        }
+                                        j++;
+                                    },
+                                    function (error) {
+                                        logger.log.error("checkPermissionGroups: Could not add permission group ", permGroup, " for role ", role);
+                                        if ((i === roles.length - 1) && (j === permissions_registry.length - 1)) {
+                                            deferred.resolve();
+                                        }
+                                        j++;
+                                    }
+                                )
+                            }
+                        } // for roles
+                    }
+                );
+            }
+        } // for permGroup
+        if (j == 0) { deferred.resolve(); }
+    }
+
     return deferred.promise;
 }
 
@@ -116,6 +155,8 @@ exports.init = function() {
 // This is called by any entity upon initialization that has permission.
 //
 exports.registerPermissions = function(permGroup, perms) {
+    
+    logger.log.info("Registering permission group ", permGroup, " for permissions: \n", perms);
     permissions_registry[permGroup] = perms;
 }
 
@@ -211,7 +252,7 @@ exports.createPermGroup = function (roleName, permGroupName) {
     var deferred = Q.defer();
     var upd = {};
     upd.$set = {};
-    upd.$set["permGroups." + permGroupName] = {};
+    upd.$set["permGroups." + permGroupName] = createDefaultPermGroups();
 
     logger.log.info('createPermGroup: Creating new permissions group (role, pg): ', roleName, permGroupName);
 

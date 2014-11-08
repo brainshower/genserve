@@ -9,19 +9,20 @@ var auth = require ('../users/auth');
 //
 exports.createNode = function (apiCall, req, res) {
 
-    var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
-    var node = (req.body.data !== undefined && req.body.data !== null) ? req.body.data : null;
-    var title = node.hasOwnProperty("title") ? node.title : null;
-    var body = node.hasOwnProperty("body") ? node.body : null;
-
     var api_createNode = apiCall ? apiCall : nodeapi.createNode;
+    var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
+    var node = {};
+    var reqData = (req.body && req.body.hasOwnProperty("data")) ? req.body.data : null;
+
+    node.title = (reqData.hasOwnProperty("title")) ? reqData.title : null;
+    node.body = (reqData.hasOwnProperty("body")) ? reqData.body : null;
 
     if (session && session.hasOwnProperty("uid") && session.hasOwnProperty("token")) {
+        logger.log.info("createNode: Creating node: ", node);
         auth.auth(session.uid, session.token).then(
             function (authResult) {
 
-                logger.log.info("createNode: Creating node (title, body): ", title, body);
-                api_createNode(title, body, session.uid).then(
+                api_createNode(node, reqData, session.uid).then(
                     function(result) {
                         logger.log.info("createNode: Node created: ", result);
                         res.send(result.node);
@@ -41,8 +42,7 @@ exports.createNode = function (apiCall, req, res) {
     } // if session
     else {
         // No session variable passed in.  Assume it's anonymous.
-        logger.log.info("createNode: Creating node (title, body): ", title, body);
-        api_createNode(title, body, null).then(
+        api_createNode(node, reqData, null).then(
             function(result) {
                 logger.log.info("createNode: Node created: ", result);
                 res.send(result.node);
@@ -61,49 +61,30 @@ exports.createNode = function (apiCall, req, res) {
 //
 exports.updateNode = function (apiCall, req, res) {
 
-    var nid = req.params.id;
-    var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
-    var title = (req.body.data.title !== undefined && req.body.data.title !== null) ? req.body.data.title : null;
-
     var api_updateNode = apiCall ? apiCall : nodeapi.updateNode;
+    var session = req.body.hasOwnProperty("session") ? req.body.session : null; // session object.
+    var nid = req.params.id;
+    var node = {};
+    var reqData = (req.body && req.body.hasOwnProperty("data")) ? req.body.data : null;
+
+    node.title = (reqData.hasOwnProperty("title")) ? reqData.title : undefined;
+    node.body = (reqData.hasOwnProperty("body")) ? reqData.body : undefined;
 
     if (session && session.hasOwnProperty("uid") && session.hasOwnProperty("token")) {
         auth.auth(session.uid, session.token).then(
             function (authResult) {
 
-                // If incoming title + body for update.
-                if (req.body.data.hasOwnProperty("body")) {
-                    var body = (req.body.data.body !== undefined && req.body.data.body !== null) ? req.body.data.body : null;
-                    var node = {title: title,
-                                body: body};
-                    logger.log.info("updateNode: Updating node (id, title, body): ", nid, title, body)
-                    api_updateNode(nid, node, session.uid, null, null).then(
-                        function(result) {
-                            logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
-                            res.send(result);
-                        },
-                        function(error) {
-                            logger.log.debug("updateNode: Error updating node. Result = ", JSON.stringify(error));
-                            res.send(500, error);
-                        }
-                    );
-                }
-                // Else just a title to update.
-                else {
-                    var node = {title: title};
-                    logger.log.info("updateNode: Updating node (id, title): ", nid, title);
-                    api_updateNode(nid, node, session.uid, null, null).then(
-                        function(result) {
-                            logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
-                            res.send(result);
-                        },
-                        function(error) {
-                            logger.log.debug("updateNode: Error updating node. Result = ", JSON.stringify(error));
-                            res.send(500, error);
-                        }
-                    );
-                }
-
+                logger.log.info("updateNode: Updating node (id, node): ", nid, node)
+                api_updateNode(nid, node, reqData, session.uid).then(
+                    function(result) {
+                        logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
+                        res.send(result);
+                    },
+                    function(error) {
+                        logger.log.debug("updateNode: Error updating node. Result = ", JSON.stringify(error));
+                        res.send(500, error);
+                    }
+                );
 
             },
             // Authentication error
@@ -114,38 +95,17 @@ exports.updateNode = function (apiCall, req, res) {
     } // if session
     else {
         // No session variable passed in.  Assume it's anonymous.
-        // If incoming title + body for update.
-        if (req.body.data.hasOwnProperty("body")) {
-            var body = (req.body.data.body !== undefined && req.body.data.body !== null) ? req.body.data.body : null;
-            var node = {title: title,
-                        body: body};
-            logger.log.info("updateNode: Updating node (id, title, body): ", nid, title, body)
-            api_updateNode(nid, node, null, null, null).then(
-                function(result) {
-                    logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
-                    res.send(result);
-                },
-                function(error) {
-                    logger.log.debug("updateNode: Error updating node. Result = ", JSON.stringify(error));
-                    res.send(500, error);
-                }
-            );
-        }
-        // Else just a title to update.
-        else {
-            var node = {title: title};
-            logger.log.info("updateNode: Updating node (id, title): ", nid, title);
-            api_updateNode(nid, node, null, null, null).then(
-                function(result) {
-                    logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
-                    res.send(result);
-                },
-                function(error) {
-                    logger.log.debug("updateNode: Error updating node. Result = ", JSON.stringify(error));
-                    res.send(500, error);
-                }
-            );
-        }    
+        logger.log.info("updateNode: Updating node (id, node): ", nid, title, body)
+        api_updateNode(nid, node, reqData, null).then(
+            function(result) {
+                logger.log.debug("updateNode: Success updating node. Result = ", JSON.stringify(result));
+                res.send(result);
+            },
+            function(error) {
+                logger.log.debug("updateNode: Error updating node. Result = ", JSON.stringify(error));
+                res.send(500, error);
+            }
+        );
     }
 }
 

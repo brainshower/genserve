@@ -73,20 +73,23 @@ exports.NODE_BASIC = "basic";
 
 // Create a new node.  Pass in title, body, and optional extender function for adding more fields, and optional permission resolver function.
 //
-//exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
-exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
+exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
 
     var db = dbopen.getDB();
     var deferred = Q.defer();
 
-    var node = {
-      title : (title) ? title : null,
-      body : (body) ? body : null,
-      creationDate : moment.utc(new Date(Date.now())).toString(),
-      type : exports.NODE_BASIC,
-    };
+    if (!node) {
+        // This shouldn't happen - Should always have a node object passed in.
+        // Safety is to just create an empty object.
+        node = {};
+        logger.log.error("nodeapi.createNode:  Called with no node object.");
+    }
 
-    // If a uid was passed in, find the associated username an put into the node object.
+    // Set the basic data for the node.
+    node.creationDate = moment.utc(new Date(Date.now())).toString();
+    node.type = exports.NODE_BASIC;
+
+    // If a uid passed in, find the associated username and add to the node as the creator/owner.
     if (uid) {
         node.uid = uid;
         db.db.collection(globals.col_users, function(err, collection) {
@@ -115,7 +118,7 @@ exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
         // Call an extension function to further manipulate the node object before insertion.
         // Extender function should change the node type (if adding fields), and could change the owner UID.
         if (nodeExtender) {
-            node = nodeExtender(node);
+            node = nodeExtender(node, reqData);
         }
     
         // Check if we have create permissions. This is done after the extender function call to ensure
@@ -167,7 +170,7 @@ exports.createNode = function (title, body, uid, nodeExtender, permResolver) {
 // Update an existing node.  Pass in a node object (only fields to be updated should be set), and
 // nodeExtender function for updating other fields.
 //
-exports.updateNode = function (nid, object, uid, nodeExtender, permResolver) {
+exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permResolver) {
 
     var node = {};
     var origOwner = false;
@@ -196,10 +199,10 @@ exports.updateNode = function (nid, object, uid, nodeExtender, permResolver) {
     function predicate () {
 
         // Update the node object with new data if passed in via the object parameter.
-        if (object.hasOwnProperty('title')) {
+        if (object.hasOwnProperty('title') && object.title) {
             node.title = object.title;
         }
-        if (object.hasOwnProperty('body')) {
+        if (object.hasOwnProperty('body') && object.body) {
             node.body = object.body;
         }
         
@@ -240,7 +243,7 @@ exports.updateNode = function (nid, object, uid, nodeExtender, permResolver) {
         // Call extender function to set fields for updating.  This is done at the very end just before updating.
         // Extender function could possibly add fields, or change the node type or owner UID.
         if (nodeExtender) {
-            node = nodeExtender(node);
+            node = nodeExtender(node, reqData);
         }
 
         db.db.collection(globals.col_nodes, function(err, collection) {
@@ -506,6 +509,4 @@ exports.deleteNode = function(nid, uid, nodeExtender) {
 
 
 // -- Initialization ------------------------------------------------
-
-// Register permissions with the role api.
 roleapi.registerPermissions(exports.NODE_BASIC, node_perms);
