@@ -30,7 +30,8 @@ exports.NODE_TYPE_JOB = "job";
 
 exports.createJob = function (node, reqData, uid) {
 
-	logger.log.info("createJob: Arrived! node = \n", node);
+	logger.log.debug("createJob: Arrived! node = \n", node, "reqData = \n", reqData, " uid = \n", uid);
+
 	nodeapi.createNode (node, reqData, uid, 
 
 		// Node Extender for setting content type and handling job-related fields
@@ -41,6 +42,7 @@ exports.createJob = function (node, reqData, uid) {
 				node.company = reqData.company;
 			}
 
+			logger.log.debug("createJob: In extender node = \n", node, "reqData = \n", reqData, " uid = \n", uid);
 			return node;
 		}
 	);

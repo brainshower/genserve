@@ -53,7 +53,7 @@ app.post('/node/all',         util.curry(node.findAllNodes, nodeapi.findAllNodes
 app.post('/node/id/:id',      util.curry(node.findNodebyId, nodeapi.findNodeById) );
 
 // Job - testing
-app.post('/job',             util.curry(node.createNode, job.createJob) );
+app.post('/job',              util.curry(node.createNode, job.createJob) );
 
 // User and authentication API
 app.post('/login/create', users.createUser); // Create a user
