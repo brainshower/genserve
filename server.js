@@ -46,14 +46,16 @@ app.use(function (req, res, next) {
 // Setup all the API routes ---------------------------------------------------------------
 
 // Node API: Use the base API functions for executing the node commands.
-app.post('/node',             util.curry(node.createNode, nodeapi.createNode) );
-app.post('/node/update/:id',  util.curry(node.updateNode, nodeapi.updateNode) );
-app.post('/node/delete/:id',  util.curry(node.deleteNode, nodeapi.deleteNode) );
-app.post('/node/all',         util.curry(node.findAllNodes, nodeapi.findAllNodes) );
-app.post('/node/id/:id',      util.curry(node.findNodebyId, nodeapi.findNodeById) );
+// The node extender function does not exist for basic nodes, so the function paramter is set to null.
+app.post('/node',             util.curry(node.createNode, null) );
+app.post('/node/update/:id',  util.curry(node.updateNode, null) );
+app.post('/node/delete/:id',  util.curry(node.deleteNode, null) );
+app.post('/node/all',         util.curry(node.findAllNodes, null) );
+app.post('/node/id/:id',      util.curry(node.findNodebyId, null) );
 
 // Job - testing
 app.post('/job',              util.curry(node.createNode, job.createJob) );
+app.post('/job/update/:id',   util.curry(node.updateNode, job.updateJob) );
 
 // User and authentication API
 app.post('/login/create', users.createUser); // Create a user

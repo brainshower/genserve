@@ -1,5 +1,6 @@
 /*
-Node - Handle all basic interactions with a node, and include linkage to other content types.
+
+node_api.js - Execute all commands for node, which includes calling extenders to allow for other content types.
 
 */
 
@@ -13,15 +14,23 @@ var async = require('async');
 var _ = require('lodash');
 var Q = require('q');
 
+var node_perm_create = 'create';
+var node_perm_readany = 'read_any';
+var node_perm_readown = 'read_own';
+var node_perm_deleteany = 'delete_any';
+var node_perm_deleteown = 'delete_own';
+var node_perm_editany = 'edit_any';
+var node_perm_editown = 'edit_own';
 
 // Initialize the permissions for basic nodes.
-var node_perms = ['create', 
-                  'read_any', 
-                  'read_own', 
-                  'delete_any', 
-                  'delete_own', 
-                  'edit_any', 
-                  'edit_own'];
+var node_perms = [node_perm_create, 
+                  node_perm_readany,
+                  node_perm_readown,
+                  node_perm_deleteany,
+                  node_perm_deleteown,
+                  node_perm_editany,
+                  node_perm_editown,
+                  ];
 
 
 
@@ -82,7 +91,7 @@ exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
         // This shouldn't happen - Should always have a node object passed in.
         // Safety is to just create an empty object.
         node = {};
-        logger.log.error("nodeapi.createNode:  Called with no node object.");
+        logger.log.error("nodeapi.createNode: Called with no node object.");
     }
 
     // Set the basic data for the node.
@@ -126,7 +135,7 @@ exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
         roleapi.getUserPerms({uid : uid}, node.type).then(
             function (perms) {
                 var ret = {};
-                if (_.has(perms, 'create')) {
+                if (_.has(perms, node_perm_create)) {
 
                     // Insert into the database.
                     db.db.collection(globals.col_nodes, function(err, collection) {
@@ -172,11 +181,12 @@ exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
 //
 exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permResolver) {
 
+    var db = dbopen.getDB();
+    var deferred = Q.defer();
+
     var node = {};
     var origOwner = false;
     var origType;
-    var db = dbopen.getDB();
-    var deferred = Q.defer();
 
     // Get the node so we can check its type.
     db.db.collection(globals.col_nodes, function(err, collection) {
@@ -187,7 +197,7 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
             }
             else {
                 // Capture if the UID passed in owns this node, the node type, and continue.
-                origOwner = (item.uid === uid);  // Capture if the owner is wanting to update his node.
+                origOwner = (item.uid === uid);  // Capture if the owner wants to update his own node.
                 origType = item.type;  // Capture the node type.
                 node = item;
                 predicate();
@@ -211,24 +221,21 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
             function (perms) {
                 var ret = {};
                 // If the permissions allow editing any node just update it.
-                if (_.has(perms, 'edit_any')) {
-                    logger.log.debug("nodeapi:  User has permission to edit any node.");
+                if (_.has(perms, node_perm_editany)) {
                     predicate2();
                 }
                 // Otherwise, if the user can edit his own node, keep going.
-                else if (_.has(perms, 'edit_own') && origOwner) {
-                    logger.log.debug("nodeapi:  User has permission to edit his own nodes.");
+                else if (_.has(perms, node_perm_editown) && origOwner) {
                     predicate2();
                 }
                 else {
-                    logger.log.debug("nodeapi:  User does not have permission to edit this node.");
                     ret = status.statusCode(2, 'perm', 'User does not have permission to update.');
                     deferred.reject(ret);
                 }
     
             }, // getUserPerms function
             function (error) {
-                logger.log.debug("nodeapi:  First check of user perms for existing node failed.");
+                logger.log.error("nodeapi.updateNode: Initial check of user perms for existing node failed.");
                 ret = status.statusCode(3, 'nodeapi', 'Could not get user permissions for existing node.');
                 deferred.reject(ret);
             }
@@ -249,7 +256,6 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
         db.db.collection(globals.col_nodes, function(err, collection) {
             collection.update({'_id' : new db.BSON.ObjectID(nid)}, node, {safe:true}, function(err, result) {
                 if (err) {
-                    logger.log.debug("nodeapi:  Could not update the node.");
                     ret = status.statusCode(4, 'nodeapi', 'Error has occurred on update');
                     deferred.reject(ret);
                 }
@@ -273,7 +279,6 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
                     roleapi.getUserPerms({uid : uid}, item.type).then(
                         function (perms) {
                             var ret = {};
-                            logger.log.debug("nodeapi:  Successfully updated the node.");
                             ret = status.success('nodeapi');
                             ret.node = item;
                             if (permResolver) {
@@ -285,7 +290,7 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
                             deferred.resolve(ret);    
                         },
                         function (error) {
-                            logger.log.debug("nodeapi:  Final check of user perms for updated node failed.");
+                            logger.log.error("nodeapi.updateNode: Final check of user perms for existing node failed.");
                             ret = status.statusCode(6, 'nodeapi', 'Could not get user permissions for updated node.');
                             deferred.reject(ret);
                         }
@@ -320,23 +325,20 @@ exports.findNodeById = function (nid, uid, permResolver) {
                 roleapi.getUserPerms({uid : uid}, node.type).then(
                     function (perms) {
                         owner = (uid === item.uid); // Set the flag if this user is the owner of the node.
-                        if (_.has(perms, 'read_any')) {
-                            logger.log.debug("nodeapi:  User has permission to read any node.");
+                        if (_.has(perms, node_perm_readany)) {
                             predicate(item, perms);
                         }
                         // Otherwise, if the user can edit his own node, keep going.
-                        else if (_.has(perms, 'read_own') && owner) {
-                            logger.log.debug("nodeapi:  User has permission to read his own nodes.");
+                        else if (_.has(perms, node_perm_readown) && owner) {
                             predicate(item, perms);
                         }
                         else {
-                            logger.log.debug("nodeapi:  User does not have permission to read this node.");
                             var ret = status.statusCode(2, 'perm', 'User does not have permission to read.');
                             deferred.reject(ret);
                         }
                     },
                     function (fail) {
-                        logger.log.debug("nodeapi:  Could not get user perms for node.");
+                        logger.log.error("nodeapi.findNodeById: Could not get user perms for node.");
                         ret = status.statusCode(3, 'nodeapi', 'Could not get user permissions for node.');
                         deferred.reject(ret);
                     }
@@ -400,8 +402,7 @@ exports.findNodesByType = function(type, uid, permResolver) {
                         roleapi.getUserPerms({uid : uid}, items[i-1].type || exports.NODE_BASIC).then(
                             function(perms) {
                                 var owner = (uid === items[i-1].uid); // Set flag that the user is the owner of this node.
-                                if (_.has(perms, 'read_any') || (_.has(perms, 'read_own') && owner)) {
-                                    logger.log.debug("nodeapi:  User has permission to read the node.");
+                                if (_.has(perms, node_perm_readany) || (_.has(perms, node_perm_readown) && owner)) {
                                     if (permResolver) {
                                         items[i-1].perms = permResolver(perms, owner);    
                                     }
@@ -417,6 +418,7 @@ exports.findNodesByType = function(type, uid, permResolver) {
                             },
                             function (fail) {
                                 // No permissions found.  Just send back (probably should return anonymous role perms at some point.)
+                                logger.log.error("nodeapi.findNodesByType: Could not find any user perms for the node: ", fail);
                                 callback(); 
                             }
                         );
@@ -440,6 +442,7 @@ exports.deleteNode = function(nid, uid, nodeExtender) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
+    
     var origType;
     var origOwner = false;
 
@@ -465,17 +468,14 @@ exports.deleteNode = function(nid, uid, nodeExtender) {
             function (perms) {
                 var ret = {};
                 // If the permissions allow editing any node just update it.
-                if (_.has(perms, 'delete_any')) {
-                    logger.log.debug("nodeapi:  User has permission to delete any node.");
+                if (_.has(perms, node_perm_deleteany)) {
                     predicate2();
                 }
                 // Otherwise, if the user can edit his own node, keep going.
-                else if (_.has(perms, 'delete_own') && origOwner) {
-                    logger.log.debug("nodeapi:  User has permission to delete his own nodes.");
+                else if (_.has(perms, node_perm_deleteown) && origOwner) {
                     predicate2();
                 }
                 else {
-                    logger.log.debug("nodeapi:  User does not have permission to delete this node.");
                     ret = status.statusCode(2, 'perm', 'User does not have permission delete.');
                     deferred.reject(ret);
                 }
@@ -498,6 +498,7 @@ exports.deleteNode = function(nid, uid, nodeExtender) {
                     if (nodeExtender) {
                         node = nodeExtender(node);
                     }
+
                     ret = status.success('nodeapi')
                     deferred.resolve(ret); 
                 }

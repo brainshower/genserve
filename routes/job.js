@@ -1,6 +1,6 @@
 /*
 
-Job Content Type
+Job.js - This module extends the node content type to manage "job nodes"
 
 */
 
@@ -28,26 +28,37 @@ exports.NODE_TYPE_JOB = "job";
 
 
 
-exports.createJob = function (node, reqData, uid) {
+// Node extender for creating a job node.
+//
+exports.createJob = function (node, reqData) {
 
-	logger.log.debug("createJob: Arrived! node = \n", node, "reqData = \n", reqData, " uid = \n", uid);
+	node.type = exports.NODE_TYPE_JOB;
 
-	nodeapi.createNode (node, reqData, uid, 
+	if (reqData.hasOwnProperty("company") && reqData.company) {
+		node.company = reqData.company;
+	}
 
-		// Node Extender for setting content type and handling job-related fields
-		function(node, reqData) {
-			node.type = exports.NODE_TYPE_JOB;
+	logger.log.debug("job.createJob: In extender node = \n", node, "\nreqData = \n", reqData);
 
-			if (reqData.hasOwnProperty("company") && reqData.company) {
-				node.company = reqData.company;
-			}
-
-			logger.log.debug("createJob: In extender node = \n", node, "reqData = \n", reqData, " uid = \n", uid);
-			return node;
-		}
-	);
+	return node;
 }
 
+
+// Node extender for creating a job node.
+//
+exports.updateJob = function (node, reqData) {
+
+	// Safety to ensure the node type is correct.
+	node.type = exports.NODE_TYPE_JOB;
+
+	if (reqData.hasOwnProperty("company") && reqData.company) {
+		node.company = reqData.company;
+	}
+
+	logger.log.debug("job.createJob: In extender node = \n", node, "\nreqData = \n", reqData);
+
+	return node;
+}
 
 
 // -- Initialization ------------------------------------------------
