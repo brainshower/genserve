@@ -8,8 +8,40 @@ in turn call the NODE API to execute the actual commands.
 var globals = require('../global/globals');
 var logger = require('../global/logger');
 var status = require('../global/status');
+var util = require('../global/utility');
 var nodeapi = require('./node_api');
 var auth = require ('../users/auth');
+
+
+// These are an array of objects containing content type names and functions that set their routes.
+var contentTypeRoutes = [];
+
+
+// Create all the node routes for Express.
+//
+exports.createNodeRoutes = function (expressApp) {
+
+    for (var i = 0; i < contentTypeRoutes.length; i++) {
+        var route = contentTypeRoutes[i];
+        logger.log.info("Creating routes for ", route.name, " nodes...");
+        if (route.hasOwnProperty('fn')) {
+            route.fn(expressApp);
+        }
+    };
+}
+
+
+// Store the function to be called that sets up the node routes.
+//
+exports.setNodeRoutes = function (contentTypeName, fn) {
+
+    contentTypeRoutes.push (
+        {
+            name: contentTypeName,
+            fn: fn,
+        }
+    );
+}
 
 
 // Create a node using the request and response data from the HTTP request.
@@ -226,6 +258,7 @@ exports.findAllNodes = function (fnNodeExtender, req, res) {
 exports.deleteNode = function (fnNodeExtender, req, res) {
 
     var nid = req.params.id;
+    var reqData = (req.body && req.body.hasOwnProperty("data")) ? req.body.data : null;
     var session = (req.body && req.body.hasOwnProperty("session")) ? req.body.session : null; // session object.
 
     logger.log.info("node.deleteNode: Deleting node (nid): ", nid);
@@ -234,7 +267,7 @@ exports.deleteNode = function (fnNodeExtender, req, res) {
         auth.auth(session.uid, session.token).then(
             function (authResult) {
 
-                nodeapi.deleteNode (nid, session.uid, fnNodeExtender).then(
+                nodeapi.deleteNode (nid, session.uid, reqData, fnNodeExtender).then(
                     function (result) {
                         logger.log.debug("node.deleteNode: Node deleted. Result = ", result);
                         res.send({});
@@ -255,7 +288,7 @@ exports.deleteNode = function (fnNodeExtender, req, res) {
     } // if session
     else {
         // No session variable passed in.  Assume it's anonymous.
-        nodeapi.deleteNode (nid, null, fnNodeExtender).then(
+        nodeapi.deleteNode (nid, null, reqData, fnNodeExtender).then(
             function (result) {
                 logger.log.debug("node.deleteNode: Node deleted. Result = ", result);
                 res.send({});
@@ -267,3 +300,17 @@ exports.deleteNode = function (fnNodeExtender, req, res) {
         );
     }
 }
+
+
+// Initialization -------------------------------------------------------------
+
+// Setup the node routes for basic nodes
+exports.setNodeRoutes (nodeapi.NODE_BASIC, function(app) {
+
+    app.post('/node',             util.curry(exports.createNode, null) );
+    app.post('/node/update/:id',  util.curry(exports.updateNode, null) );
+    app.post('/node/delete/:id',  util.curry(exports.deleteNode, null) );
+    app.post('/node/all',         util.curry(exports.findAllNodes, null) );
+    app.post('/node/id/:id',      util.curry(exports.findNodebyId, null) );
+
+});

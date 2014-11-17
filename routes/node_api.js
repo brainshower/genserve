@@ -33,6 +33,9 @@ var node_perms = [node_perm_create,
                   ];
 
 
+// Basic node type.
+exports.NODE_BASIC = "basic";
+
 
 // Permission resolver.  With a list of permissions available, resolves them to the permissions available for a given node.
 // Pass in permissions object, and boolean if the object is owned by the given user with these permissions.
@@ -75,11 +78,6 @@ var defaultPermissionResolver = function (perms, owner) {
 };
 
 
-// Basic node type.
-exports.NODE_BASIC = "basic";
-
-
-
 // Create a new node.  Pass in title, body, and optional extender function for adding more fields, and optional permission resolver function.
 //
 exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
@@ -97,6 +95,8 @@ exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
     // Set the basic data for the node.
     node.creationDate = moment.utc(new Date(Date.now())).toString();
     node.type = exports.NODE_BASIC;
+    node.children = [];  // Array of children nodes, if any.
+    node.parent = null;  // Parent node, if any.
 
     // If a uid passed in, find the associated username and add to the node as the creator/owner.
     if (uid) {
@@ -127,9 +127,27 @@ exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
         // Call an extension function to further manipulate the node object before insertion.
         // Extender function should change the node type (if adding fields), and could change the owner UID.
         if (nodeExtender) {
-            node = nodeExtender(node, reqData);
+            var ret = nodeExtender(node, reqData);
+            if (ret.hasOwnProperty('then')) {
+                // Return value is a promise, so call that function.
+                ret.then(function(obj) {
+                    node = obj;
+                    predicate2();
+                });
+            }
+            else {
+                // Extender didn't need a promise, so just use the value returned.
+                node = ret;
+                predicate2();
+            }
         }
-    
+        else {
+            predicate2();
+        }
+    }
+
+    function predicate2() {
+
         // Check if we have create permissions. This is done after the extender function call to ensure
         // we know the correct node type (which may have been changed by the extender function).
         roleapi.getUserPerms({uid : uid}, node.type).then(
@@ -215,6 +233,12 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
         if (object.hasOwnProperty('body') && object.body) {
             node.body = object.body;
         }
+        if (object.hasOwnProperty('parent') && object.parent) {
+            node.parent = object.parent;
+        }
+        if (object.hasOwnProperty('children') && object.children) {
+            node.children = object.children;
+        }
         
         // Check permissions based on the original type of the node (versus a possible type change by the extender fn)
         roleapi.getUserPerms({uid : uid}, origType).then(
@@ -250,8 +274,26 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
         // Call extender function to set fields for updating.  This is done at the very end just before updating.
         // Extender function could possibly add fields, or change the node type or owner UID.
         if (nodeExtender) {
-            node = nodeExtender(node, reqData);
+            var ret = nodeExtender(node, reqData);
+            if (ret.hasOwnProperty('then')) {
+                // Return value is a promise, so call that function.
+                ret.then(function(obj) {
+                    node = obj;
+                    predicate3();
+                });
+            }
+            else {
+                // Extender didn't need a promise, so just use the value returned.
+                node = ret;
+                predicate3();
+            }
         }
+        else {
+            predicate3();
+        }
+    } // predicate2
+
+    function predicate3 () {
 
         db.db.collection(globals.col_nodes, function(err, collection) {
             collection.update({'_id' : new db.BSON.ObjectID(nid)}, node, {safe:true}, function(err, result) {
@@ -260,14 +302,14 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
                     deferred.reject(ret);
                 }
                 else {
-                    predicate3();
+                    predicate4();
                 }
             });
         });
-    }; // predicate2
+    }; // predicate3
 
     // Finally, get node and its permissions based on the possible new type & owner of the node (may changed by the extender fn)
-    function predicate3 () {
+    function predicate4 () {
 
         db.db.collection(globals.col_nodes, function (err, collection) {
             collection.findOne({'_id': new db.BSON.ObjectID(nid)}, function (err, item) {
@@ -299,7 +341,7 @@ exports.updateNode = function (nid, object, reqData, uid, nodeExtender, permReso
             })
         });
 
-    }
+    } // predicate4
 
     return deferred.promise;
 }
@@ -438,7 +480,7 @@ exports.findNodesByType = function(type, uid, permResolver) {
 
 // Delete a node by passing in the node ID.
 // 
-exports.deleteNode = function(nid, uid, nodeExtender) {
+exports.deleteNode = function(nid, uid, reqData, nodeExtender) {
 
     var deferred = Q.defer();
     var db = dbopen.getDB();
@@ -488,26 +530,103 @@ exports.deleteNode = function(nid, uid, nodeExtender) {
     function predicate2 () {
         db.db.collection(globals.col_nodes, function(err, collection) {
             collection.remove({'_id':new db.BSON.ObjectID(nid)}, {safe:true}, function(err, result) {
-                var ret = {};
                 if (err) {
-                    ret = status.statusCode(3, 'nodeapi', 'Error deleting node');
+                    var ret = status.statusCode(3, 'nodeapi', 'Error deleting node');
                     deferred.reject(ret); 
                 }
                 else {
                     // Now that the node has been deleted successfully, call the extender function so anything else related can be deleted.
-                    if (nodeExtender) {
-                        node = nodeExtender(node);
-                    }
-
-                    ret = status.success('nodeapi')
-                    deferred.resolve(ret); 
+                    predicate3();                    
                 }
             });
         });
     }
+
+    // Perform the node update.  We're just re-inserting the node (not updating fields).  Since we're single-threaded,
+    // this should be an effective atomic operation and safe.
+    function predicate3 () {
+
+        // Call extender function to set fields for updating.  This is done at the very end just before updating.
+        // Extender function could possibly add fields, or change the node type or owner UID.
+        if (nodeExtender) {
+            var ret = nodeExtender(node, reqData);
+            if (ret.hasOwnProperty('then')) {
+                // Return value is a promise, so call that function.
+                ret.then(function(obj) {
+                    predicate4();
+                });
+            }
+            else {
+                // Extender didn't need a promise, so just use the value returned.
+                predicate4();
+            }
+        }
+        else {
+            predicate4();
+        }
+    } // predicate3
+
+    function predicate4() {
+        var ret = status.success('nodeapi');
+        deferred.resolve(ret); 
+    } // predicate4
+
+
     return deferred.promise;
 }
 
+
+// Add a child pointer childNID to a node parentNID.
+//
+exports.addChildNode = function (parentNID, childNID) {
+
+    var deferred = Q.defer();
+    var db = dbopen.getDB();
+    var node = {};
+    var ret;
+
+    // Get the node.
+    db.db.collection(globals.col_nodes, function(err, collection) {
+        collection.findOne({'_id': new db.BSON.ObjectID(parentNID)}, function(err, item) {
+            if (err) {
+                ret = status.statusCode(1, 'nodeapi', 'Could not load the node.');
+                deferred.reject(ret);
+            }
+            else {
+                // Capture if the UID passed in owns this node, the node type, and continue.
+                node = item;
+                predicate();
+            }
+        });
+    });
+
+    // Create the child link and update the node again.
+    function predicate () {
+
+        if (node.hasOwnProperty('children') && Array.isArray(node.children)) {
+            node.children.push(childNID);
+        }
+        else {
+            node.children = [];
+            node.children.push(childNID);
+
+            db.db.collection(globals.col_nodes, function(err, collection) {
+                collection.update({'_id' : new db.BSON.ObjectID(nid)}, node, {safe:true}, function(err, result) {
+                    if (err) {
+                        ret = status.statusCode(4, 'nodeapi', 'Error has occurred on update');
+                        deferred.reject(ret);
+                    }
+                    else {
+                        var ret = status.success('nodeapi');
+                        deferred.resolve(ret); 
+                    }
+                });
+            });
+        } // else
+    }
+
+    return deferred.promise;
+}
 
 // -- Initialization ------------------------------------------------
 roleapi.registerPermissions(exports.NODE_BASIC, node_perms);

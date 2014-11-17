@@ -7,11 +7,13 @@ Job.js - This module extends the node content type to manage "job nodes"
 var globals = require('../global/globals');
 var status = require('../global/status');
 var logger = require('../global/logger');
+var util = require('../global/utility');
 var _ = require('lodash');
 var Q = require('q');
 var node = require('./node');
 var nodeapi = require('./node_api');
 var roleapi = require('../users/role_api');
+
 
 
 // Initialize the permissions for basic nodes.
@@ -66,3 +68,10 @@ exports.updateJob = function (node, reqData) {
 // Register permissions with the role api.
 roleapi.registerPermissions(exports.NODE_TYPE_JOB, job_perms);
 
+// Setup the node routes for job nodes
+node.setNodeRoutes (exports.NODE_TYPE_JOB, function(app) {
+
+	app.post('/job',              util.curry(node.createNode, exports.createJob) );
+	app.post('/job/update/:id',   util.curry(node.updateNode, exports.updateJob) );
+
+});
