@@ -23,7 +23,7 @@ exports.createNodeRoutes = function (expressApp) {
 
     for (var i = 0; i < contentTypeRoutes.length; i++) {
         var route = contentTypeRoutes[i];
-        logger.log.info("Creating routes for ", route.name, " nodes...");
+        logger.log.info("Creating routes for", route.name, "nodes...");
         if (route.hasOwnProperty('fn')) {
             route.fn(expressApp);
         }
@@ -45,7 +45,7 @@ exports.setNodeRoutes = function (contentTypeName, fn) {
 
 
 // Create a node using the request and response data from the HTTP request.
-// Node extender function is used by modules that extend nodes to create other content types.
+// Node extender is an object linking to various functions, used by modules that extend nodes to create other content types.
 //
 exports.createNode = function (fnNodeExtender, req, res) {
 
@@ -102,7 +102,7 @@ exports.createNode = function (fnNodeExtender, req, res) {
 
 
 // Update a node using the request and response data from the HTTP request.
-// Node extender function is used by modules that extend nodes to create other content types.
+// Node extender is an object linking to various functions, used by modules that extend nodes to create other content types.
 //
 exports.updateNode = function (fnNodeExtender, req, res) {
 
@@ -156,7 +156,7 @@ exports.updateNode = function (fnNodeExtender, req, res) {
 
 
 // Find node by the node ID using the request and response data from the HTTP request.
-// Node: the node extender does nothing in this function; it's there for consistency with the other functions.
+// Node extender is an object linking to various functions, used by modules that extend nodes to create other content types.
 //
 exports.findNodeById = function (fnNodeExtender, req, res) {
 
@@ -204,7 +204,7 @@ exports.findNodeById = function (fnNodeExtender, req, res) {
 
 
 // Find node by the node type using the request and response data from the HTTP request.
-// Node: the node extender does nothing in this function; it's there for consistency with the other functions.
+// Node extender is an object linking to various functions, used by modules that extend nodes to create other content types.
 //
 exports.findAllNodes = function (fnNodeExtender, req, res) {
 
@@ -253,7 +253,7 @@ exports.findAllNodes = function (fnNodeExtender, req, res) {
 
 
 // Delete node by node ID.
-// Node: the node extender does nothing in this function; it's there for consistency with the other functions.
+// Node extender is an object linking to various functions, used by modules that extend nodes to create other content types.
 //
 exports.deleteNode = function (fnNodeExtender, req, res) {
 

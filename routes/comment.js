@@ -30,17 +30,14 @@ exports.NODE_TYPE_COMMENT = "comment";
 
 
 
-// Node extender for creating a comment node.
+// Pre-insertion node extender for creating a comment node (called before node is saved)
 //
-exports.createComment = function (node, reqData) {
+exports.createCommentPreInsert = function (node, reqData) {
 
 	node.type = exports.NODE_TYPE_COMMENT;
 
 	if (reqData.hasOwnProperty("parent") && reqData.parent) {
 		node.parent = reqData.parent;
-
-		// TODO Need to look up the parent node and add this node as a child.
-		addChildNode(node.parent) // SHIT -- need the child's NID which I don't have yet.
 	}
 	else {
 		logger.log.error("comment.createComment: Creating a comment without a parent.");
@@ -54,6 +51,23 @@ exports.createComment = function (node, reqData) {
 	logger.log.debug("comment.createComment: In extender node = \n", node, "\nreqData = \n", reqData);
 
 	return node;
+}
+
+
+// Post-insertion node extender for creating a comment node (called after node is saved)
+//
+exports.createCommentPostInsert = function(node, reqData) {
+
+	var deferred = Q.defer();
+
+	// Look up the parent node and add this comment node as a child.
+	nodeapi.addChildNode(node.parent, node._id).then(
+		function () {
+			deferred.resolve();
+		}
+	);
+
+	return deferred.promise;
 }
 
 
@@ -82,7 +96,11 @@ roleapi.registerPermissions(exports.NODE_TYPE_COMMENT, comment_perms);
 // Setup the node routes for job nodes
 node.setNodeRoutes (exports.NODE_TYPE_COMMENT, function(app) {
 
-	app.post('/comment',              util.curry(node.createNode, exports.createComment) );
+	app.post('/comment', util.curry(node.createNode, {preInsert: exports.createCommentPreInsert, 
+		                                              postInsert: exports.createCommentPostInsert}
+		                 )
+	);
+
 	app.post('/comment/update/:id',   util.curry(node.updateNode, exports.updateComment) );
 
 });

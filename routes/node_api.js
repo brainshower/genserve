@@ -112,41 +112,46 @@ exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
                     if (item.hasOwnProperty('username')) {
                         node.username = item.username;
                     }
-                    predicate();
+                    callPreInsertHook();
                 }
     
             });
         });
     }
     else {
-        predicate();
+        callPreInsertHook();
     }
 
-    function predicate () {
+
+    function callPreInsertHook () {
 
         // Call an extension function to further manipulate the node object before insertion.
         // Extender function should change the node type (if adding fields), and could change the owner UID.
-        if (nodeExtender) {
-            var ret = nodeExtender(node, reqData);
+        logger.log.debug("nodeExtender = ", nodeExtender);
+        
+        if (nodeExtender && nodeExtender.hasOwnProperty('preInsert')) {
+            var ret = nodeExtender.preInsert(node, reqData);
             if (ret.hasOwnProperty('then')) {
                 // Return value is a promise, so call that function.
                 ret.then(function(obj) {
                     node = obj;
-                    predicate2();
+                    insertNode();
                 });
             }
             else {
                 // Extender didn't need a promise, so just use the value returned.
                 node = ret;
-                predicate2();
+                insertNode();
             }
         }
         else {
-            predicate2();
+            // Node extender didn't have this function defined, so skip this step.
+            insertNode();
         }
     }
 
-    function predicate2() {
+
+    function insertNode() {
 
         // Check if we have create permissions. This is done after the extender function call to ensure
         // we know the correct node type (which may have been changed by the extender function).
@@ -163,16 +168,17 @@ exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
                                 deferred.reject(ret);
                             } 
                             else {
-                                // Success!  Not send the permissions back with the object.
-                                ret = status.success('nodeapi')
-                                ret.node = result[0];
-                                if (permResolver) {
-                                    ret.node.perms = permResolver(perms, uid === node.uid);
-                                }
-                                else {
-                                    ret.node.perms = defaultPermissionResolver(perms, true); // attach the permissions to the node object.
-                                }
-                                deferred.resolve(ret);
+                                // Success!  Now send the permissions back with the object.
+                                callPostInsertHook (result[0], perms);
+                                // ret = status.success('nodeapi')
+                                // ret.node = result[0];
+                                // if (permResolver) {
+                                //     ret.node.perms = permResolver(perms, uid === node.uid);
+                                // }
+                                // else {
+                                //     ret.node.perms = defaultPermissionResolver(perms, true); // attach the permissions to the node object.
+                                // }
+                                // deferred.resolve(ret);
                             }
                         });
                     }); // insert
@@ -188,8 +194,46 @@ exports.createNode = function (node, reqData, uid, nodeExtender, permResolver) {
                 deferred.reject(status);
             } 
         ); // roleapi
-    };
+    }
     
+
+    function callPostInsertHook (nodeObject, perms) {
+        // Call an extension function to further manipulate the node object after insertion.
+        // Extender function should change the node type (if adding fields), and could change the owner UID.
+        if (nodeExtender && nodeExtender.hasOwnProperty('postInsert')) {
+            var ret = nodeExtender.postInsert(nodeObject, reqData);
+            if (ret.hasOwnProperty('then')) {
+                // Return value is a promise, so call that function.  We do not use a resolved value from postInsert.
+                ret.then(function() {
+                    returnNodeObject (nodeObject, perms);
+                });
+            }
+            else {
+                // Extender didn't need a promise, so just move on (we don't use a returned value)
+                returnNodeObject (nodeObject, perms);
+            }
+        }
+        else {
+            // Node extender didn't have this function defined, so skip this step.
+            returnNodeObject (nodeObject, perms);
+        }
+
+    }
+
+
+    function returnNodeObject (nodeObject, perms) {
+        var ret = status.success('nodeapi')
+        ret.node = nodeObject;
+        if (permResolver) {
+            ret.node.perms = permResolver(perms, uid === nodeObject.uid);
+        }
+        else {
+            ret.node.perms = defaultPermissionResolver(perms, true); // attach the permissions to the node object.
+        }
+
+        deferred.resolve(ret);
+    }
+
     return deferred.promise;
 }
 
@@ -585,6 +629,8 @@ exports.addChildNode = function (parentNID, childNID) {
     var node = {};
     var ret;
 
+    logger.log.debug("nodeapi.addChildNode: parentNID =", parentNID, "childNID =", childNID);
+    
     // Get the node.
     db.db.collection(globals.col_nodes, function(err, collection) {
         collection.findOne({'_id': new db.BSON.ObjectID(parentNID)}, function(err, item) {

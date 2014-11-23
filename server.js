@@ -21,7 +21,8 @@ var express = require('express'),
     util = require('./global/utility');
 
 // Load any contributed node modules here.
-var job = require('./routes/job');
+//var job = require('./routes/job');
+var comment = require('./routes/comment');
 
 
 logger.log.info("Log initalized.  Initializing Express...");
@@ -48,6 +49,9 @@ app.use(function (req, res, next) {
     // Set to true if you need the website to include cookies in the requests sent
     // to the API (e.g. in case you use sessions)
     //res.setHeader('Access-Control-Allow-Credentials', false);
+
+    //logger.log.debug("App: About to pass to middleware...");
+    //logger.log.debug("req = ", req.body);
 
     // Pass to next layer of middleware
     next();
