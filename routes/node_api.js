@@ -651,24 +651,26 @@ exports.addChildNode = function (parentNID, childNID) {
 
         if (node.hasOwnProperty('children') && Array.isArray(node.children)) {
             node.children.push(childNID);
+            logger.log.debug("Added child to parent node: ", node.children);
         }
         else {
             node.children = [];
             node.children.push(childNID);
+            logger.log.debug("Added child to parent node: ", node.children);
+        }
 
-            db.db.collection(globals.col_nodes, function(err, collection) {
-                collection.update({'_id' : new db.BSON.ObjectID(nid)}, node, {safe:true}, function(err, result) {
-                    if (err) {
-                        ret = status.statusCode(4, 'nodeapi', 'Error has occurred on update');
-                        deferred.reject(ret);
-                    }
-                    else {
-                        var ret = status.success('nodeapi');
-                        deferred.resolve(ret); 
-                    }
-                });
+        db.db.collection(globals.col_nodes, function(err, collection) {
+            collection.update({'_id' : new db.BSON.ObjectID(parentNID)}, node, {safe:true}, function(err, result) {
+                if (err) {
+                    ret = status.statusCode(4, 'nodeapi', 'Error has occurred on update');
+                    deferred.reject(ret);
+                }
+                else {
+                    var ret = status.success('nodeapi');
+                    deferred.resolve(ret); 
+                }
             });
-        } // else
+        });
     }
 
     return deferred.promise;

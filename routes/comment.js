@@ -44,10 +44,6 @@ exports.createCommentPreInsert = function (node, reqData) {
 		node.parent = null;
 	}
 
-	if (reqData.hasOwnProperty("child") && reqData.child) {
-		node.children.push(reqData.child);
-	}
-
 	logger.log.debug("comment.createComment: In extender node = \n", node, "\nreqData = \n", reqData);
 
 	return node;
